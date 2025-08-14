@@ -1,0 +1,74 @@
+/* Messages page specific styles */
+
+/* Primary color variables */
+:root {
+  --color-primary: #ff4b91;
+  --color-primary-dark: #e6337c;
+  --color-primary-light: #ffb3d1;
+}
+
+/* Message bubble animations */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Apply animations to messages */
+.flex-1 > div {
+  animation: fadeIn 0.3s ease-out;
+}
+
+/* Disable animations when needed */
+.no-anim > div {
+  animation: none !important;
+}
+
+/* Smooth transitions for hover effects */
+.hover\:bg-gray-50 {
+  transition: background-color 0.2s ease;
+}
+
+/* Custom scrollbar for message containers */
+.overflow-y-auto::-webkit-scrollbar {
+  width: 6px;
+}
+
+.overflow-y-auto::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 10px;
+}
+
+.overflow-y-auto::-webkit-scrollbar-thumb {
+  background: #ddd;
+  border-radius: 10px;
+}
+
+.overflow-y-auto::-webkit-scrollbar-thumb:hover {
+  background: #ccc;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .w-1\/3 {
+    width: 40%;
+  }
+  
+  .w-2\/3 {
+    width: 60%;
+  }
+}
+
+@media (max-width: 640px) {
+  .flex {
+    flex-direction: column;
+  }
+  
+  .w-1\/3, .w-2\/3 {
+    width: 100%;
+  }
+  
+  .border-r {
+    border-right: none;
+    border-bottom: 1px solid #e5e7eb;
+  }
+}

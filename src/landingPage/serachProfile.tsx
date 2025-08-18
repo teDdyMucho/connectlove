@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Search } from 'lucide-react';
 import './mainPage.css';
 import { useAuth } from '../components/AuthContext';
+import { supabase } from '../lib/supabaseClient';
 
 interface SearchProfileProps {
   navigateTo: (page: string) => void;
@@ -17,6 +18,15 @@ interface ProfileResult {
   bio?: string;
 }
 
+// Shape of rows returned from Supabase 'users' table for live suggestions
+type UserRow = {
+  username: string | null;
+  full_name: string | null;
+  avatar_url: string | null;
+  user_type: string | null;
+  email?: string | null;
+};
+
 const SearchProfile: React.FC<SearchProfileProps> = ({ navigateTo }) => {
   const { setSelectedProfile } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
@@ -24,74 +34,72 @@ const SearchProfile: React.FC<SearchProfileProps> = ({ navigateTo }) => {
   const [searchResults, setSearchResults] = useState<ProfileResult[]>([]);
   const [error, setError] = useState<string | null>(null);
 
-
+  // Live suggestions dropdown state
+  const [suggestions, setSuggestions] = useState<ProfileResult[]>([]);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const latestQueryRef = useRef('');
+  const blurTimeoutRef = useRef<number | null>(null);
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (!searchQuery.trim()) {
+    await runSearch(searchQuery);
+  };
+
+  // Extracted runner so we can trigger search on mount from header-enter
+  const runSearch = async (query: string) => {
+    const q = (query || '').trim();
+    if (!q) {
       setError('Please enter a search term');
       return;
     }
-    
+
     setIsSearching(true);
     setError(null);
-    
+
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
-      
+
       const response = await fetch('https://primary-production-6722.up.railway.app/webhook/c24cb5f2-5613-4bdb-8367-f371b65ea6da', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json'
         },
-        body: JSON.stringify({ query: searchQuery }),
+        body: JSON.stringify({ query: q }),
         signal: controller.signal,
-        mode: 'cors' // Explicitly set CORS mode
+        mode: 'cors'
       });
-      
+
       clearTimeout(timeoutId);
-      
+
       if (!response.ok) {
         throw new Error(`Search failed with status: ${response.status}`);
       }
-      
+
       const data = await response.json();
-      
-      // Handle the single user object response from the webhook
+
       if (data) {
-        // Check for undefined values in array response
         if (Array.isArray(data) && data.length > 0) {
-          // Check if all values in the first object are "undefined"
           const firstItem = data[0];
-          if (firstItem && 
-              (firstItem.username === "undefined" || firstItem.username === undefined) && 
-              (firstItem.full_name === "undefined" || firstItem.full_name === undefined) && 
-              (firstItem.user_type === "undefined" || firstItem.user_type === undefined)) {
+          if (firstItem &&
+              (firstItem.username === 'undefined' || firstItem.username === undefined) &&
+              (firstItem.full_name === 'undefined' || firstItem.full_name === undefined) &&
+              (firstItem.user_type === 'undefined' || firstItem.user_type === undefined)) {
             setError('User not found');
             setSearchResults([]);
             return;
           }
-          
           setSearchResults(data);
-          
-          if (data.length === 0) {
-            setError('No profiles found matching your search');
-          }
-        }
-        // If it's a single user object (not an array), convert it to an array with one item
-        else if (data.username || data.full_name) {
-          // Check if all values are "undefined"
-          if ((data.username === "undefined" || data.username === undefined) && 
-              (data.full_name === "undefined" || data.full_name === undefined) && 
-              (data.user_type === "undefined" || data.user_type === undefined)) {
+          if (data.length === 0) setError('No profiles found matching your search');
+        } else if (data.username || data.full_name) {
+          if ((data.username === 'undefined' || data.username === undefined) &&
+              (data.full_name === 'undefined' || data.full_name === undefined) &&
+              (data.user_type === 'undefined' || data.user_type === undefined)) {
             setError('User not found');
             setSearchResults([]);
             return;
           }
-          
           const profileData = {
             id: data.username || '1',
             name: data.full_name || data.username || 'User',
@@ -99,31 +107,24 @@ const SearchProfile: React.FC<SearchProfileProps> = ({ navigateTo }) => {
             category: data.user_type || 'User',
             supporters: data.supporters || '0',
             rating: data.rating || 4.5,
-            bio: data.bio || `${data.full_name || 'User'}'s profile`
+            bio: data.bio || `${data.full_name || 'User'}'s profile`,
           };
-          
           setSearchResults([profileData]);
-        } 
-        // If it's an array of profiles
-        else if (Array.isArray(data.profiles)) {
-          // Check if profiles contain undefined values
+        } else if (Array.isArray(data.profiles)) {
           if (data.profiles.length > 0) {
             const firstProfile = data.profiles[0];
-            if (firstProfile && 
-                Object.values(firstProfile).every(val => val === "undefined" || val === undefined)) {
+            if (
+              firstProfile &&
+              Object.values(firstProfile).every((val: unknown) => (typeof val === 'string' && val === 'undefined') || val === undefined)
+            ) {
               setError('User not found');
               setSearchResults([]);
               return;
             }
           }
-          
           setSearchResults(data.profiles);
-          
-          if (data.profiles.length === 0) {
-            setError('No profiles found matching your search');
-          }
-        } 
-        else {
+          if (data.profiles.length === 0) setError('No profiles found matching your search');
+        } else {
           console.error('Unexpected response format:', data);
           setError('No matching profiles found');
           setSearchResults([]);
@@ -141,6 +142,111 @@ const SearchProfile: React.FC<SearchProfileProps> = ({ navigateTo }) => {
     }
   };
 
+  // On mount: if coming from header enter, run search immediately
+  useEffect(() => {
+    try {
+      const pending = localStorage.getItem('pending_search_query');
+      if (pending && pending.trim()) {
+        setSearchQuery(pending);
+        // Fire and forget
+        void runSearch(pending);
+        localStorage.removeItem('pending_search_query');
+      }
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  // Debounced live search suggestions from Supabase
+  useEffect(() => {
+    // Clear suggestions when query is empty
+    if (!searchQuery.trim()) {
+      setSuggestions([]);
+      setShowDropdown(false);
+      return;
+    }
+
+    latestQueryRef.current = searchQuery;
+    const q = searchQuery.trim();
+    const timeout = window.setTimeout(async () => {
+      try {
+        // Query 'users' table for similar names/usernames
+        // Using ilike for case-insensitive partial match
+        const { data, error: sbError } = await supabase
+          .from('users')
+          .select('username, full_name, avatar_url, user_type, email')
+          .or(`full_name.ilike.%${q}%,username.ilike.%${q}%,email.ilike.%${q}%`)
+          .limit(8);
+
+        // Ignore if query changed while awaiting
+        if (latestQueryRef.current !== searchQuery) return;
+
+        if (sbError) {
+          // Do not surface as page error; just hide suggestions
+          console.error('Supabase live search error:', sbError.message);
+          setSuggestions([]);
+          setShowDropdown(false);
+          return;
+        }
+
+        const rows = (data || []) as UserRow[];
+        const mapped: ProfileResult[] = rows.map((u) => ({
+          id: u.username || u.full_name || 'user',
+          name: u.full_name || u.username || 'User',
+          avatar: u.avatar_url || 'https://i.pravatar.cc/150',
+          category: u.user_type || 'User',
+        }));
+
+        setSuggestions(mapped);
+        setShowDropdown(mapped.length > 0);
+      } catch (err) {
+        console.error('Live search suggestions error:', err);
+        setSuggestions([]);
+        setShowDropdown(false);
+      }
+    }, 300); // debounce 300ms
+
+    return () => {
+      clearTimeout(timeout);
+    };
+  }, [searchQuery]);
+
+  const handleSelectSuggestion = (profile: ProfileResult) => {
+    // When picking a suggestion, go to creator or self profile
+    let isSelf = false;
+    try {
+      const publicId = localStorage.getItem('public_id') || '';
+      const email = localStorage.getItem('logged_in_email') || '';
+      const storedUsername = localStorage.getItem('username') || '';
+      const candidates = [publicId, email, storedUsername]
+        .filter(Boolean)
+        .map((v) => String(v).toLowerCase());
+      const targetIds = [profile.id, profile.name]
+        .filter(Boolean)
+        .map((v) => String(v).toLowerCase());
+      isSelf = candidates.some((c) => targetIds.includes(c));
+    } catch {
+      isSelf = false;
+    }
+
+    setShowDropdown(false);
+
+    if (isSelf) {
+      navigateTo('profile');
+      return;
+    }
+
+    setSelectedProfile({
+      name: profile.name,
+      username: profile.id,
+      avatar: profile.avatar,
+      bio: profile.bio,
+      supporters: profile.supporters,
+      rating: profile.rating,
+    });
+    navigateTo('creator');
+  };
+
   return (
     <div className="search-profile bg-background text-gray-900 min-h-screen flex flex-col relative pt-16">
       {/* Header with Search */}
@@ -148,7 +254,16 @@ const SearchProfile: React.FC<SearchProfileProps> = ({ navigateTo }) => {
         <div className="max-w-6xl mx-auto flex items-center justify-between">
           <div className="text-primary font-bold text-xl">ConnectLove</div>
           <div className="flex items-center space-x-4 w-full max-w-md">
-            <form onSubmit={handleSearch} className="relative w-full">
+            <form onSubmit={handleSearch} className="relative w-full"
+              onFocus={() => {
+                if (suggestions.length > 0 && searchQuery.trim()) setShowDropdown(true);
+              }}
+              onBlur={() => {
+                // Delay hiding to allow click
+                if (blurTimeoutRef.current) window.clearTimeout(blurTimeoutRef.current);
+                blurTimeoutRef.current = window.setTimeout(() => setShowDropdown(false), 120);
+              }}
+            >
               <input
                 type="text"
                 placeholder="Search profiles..."
@@ -163,6 +278,31 @@ const SearchProfile: React.FC<SearchProfileProps> = ({ navigateTo }) => {
               >
                 <Search className="h-5 w-5" />
               </button>
+
+              {/* Live suggestions dropdown */}
+              {showDropdown && suggestions.length > 0 && (
+                <div className="absolute z-50 mt-2 left-0 right-0 bg-white border border-gray-200 rounded-lg shadow-lg max-h-64 overflow-y-auto">
+                  {suggestions.map((s) => (
+                    <button
+                      key={s.id}
+                      type="button"
+                      className="w-full text-left px-3 py-2 hover:bg-gray-50 flex items-center gap-3"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => handleSelectSuggestion(s)}
+                    >
+                      <img
+                        src={s.avatar || 'https://i.pravatar.cc/150'}
+                        alt={s.name}
+                        className="w-8 h-8 rounded-full object-cover"
+                      />
+                      <div>
+                        <div className="text-sm font-medium text-gray-900">{s.name}</div>
+                        <div className="text-xs text-gray-500">@{s.id}{s.category ? ` • ${s.category}` : ''}</div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
             </form>
           </div>
           <div className="flex items-center space-x-4">

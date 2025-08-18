@@ -2,6 +2,8 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Heart, MessageSquare, Share2, Lock, Search, Bell, User, Home, Video } from 'lucide-react';
 import './mainPage.css';
 import ProfileDropdown from '../components/ProfileDropdown';
+import { supabase } from '../lib/supabaseClient';
+import { useAuth } from '../components/AuthContext';
 
 interface MainPageProps {
   navigateTo: (page: string) => void;
@@ -11,31 +13,122 @@ const MainPage: React.FC<MainPageProps> = ({ navigateTo }) => {
   const [showDropdown, setShowDropdown] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
-  
+  const { setSelectedProfile } = useAuth();
+
+  // Header search state
+  const [headerQuery, setHeaderQuery] = useState('');
+  type UserRow = {
+    username: string | null;
+    full_name: string | null;
+    avatar_url: string | null;
+    user_type: string | null;
+    email?: string | null;
+  };
+  type ProfileResult = {
+    id: string;
+    name: string;
+    avatar: string;
+    category?: string;
+  };
+  const [suggestions, setSuggestions] = useState<ProfileResult[]>([]);
+  const [showSearchDropdown, setShowSearchDropdown] = useState(false);
+  const latestHeaderQueryRef = useRef('');
+
   const toggleDropdown = () => {
     setShowDropdown(!showDropdown);
   };
-  
+
   const closeDropdown = () => {
+    setShowDropdown(false);
+  };
+
+  const handleClickOutside = (event: MouseEvent) => {
+    if (dropdownRef.current && 
+        !dropdownRef.current.contains(event.target as Node) &&
+        buttonRef.current && 
+        !buttonRef.current.contains(event.target as Node)) {
       setShowDropdown(false);
+    }
+  };
+
+  useEffect(() => {
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
     };
-    
-    // Close dropdown when clicking outside
-    useEffect(() => {
-      const handleClickOutside = (event: MouseEvent) => {
-        if (dropdownRef.current && 
-            !dropdownRef.current.contains(event.target as Node) &&
-            buttonRef.current && 
-            !buttonRef.current.contains(event.target as Node)) {
-          setShowDropdown(false);
+  }, []);
+
+  // Debounced live suggestions for header search
+  useEffect(() => {
+    if (!headerQuery.trim()) {
+      setSuggestions([]);
+      setShowSearchDropdown(false);
+      return;
+    }
+    latestHeaderQueryRef.current = headerQuery;
+    const q = headerQuery.trim();
+    const t = window.setTimeout(async () => {
+      try {
+        const { data, error } = await supabase
+          .from('users')
+          .select('username, full_name, avatar_url, user_type, email')
+          .or(`full_name.ilike.%${q}%,username.ilike.%${q}%,email.ilike.%${q}%`)
+          .limit(8);
+        if (latestHeaderQueryRef.current !== headerQuery) return;
+        if (error) {
+          console.error('Header live search error:', error.message);
+          setSuggestions([]);
+          setShowSearchDropdown(false);
+          return;
         }
-      };
-      
-      document.addEventListener('mousedown', handleClickOutside);
-      return () => {
-        document.removeEventListener('mousedown', handleClickOutside);
-      };
-    }, []);
+        const rows = (data || []) as UserRow[];
+        const mapped: ProfileResult[] = rows.map((u) => ({
+          id: u.username || u.full_name || 'user',
+          name: u.full_name || u.username || 'User',
+          avatar: u.avatar_url || 'https://i.pravatar.cc/150',
+          category: u.user_type || 'User',
+        }));
+        setSuggestions(mapped);
+        setShowSearchDropdown(mapped.length > 0);
+      } catch (e) {
+        console.error('Header live search exception:', e);
+        setSuggestions([]);
+        setShowSearchDropdown(false);
+      }
+    }, 300);
+    return () => clearTimeout(t);
+  }, [headerQuery]);
+
+  const handleSelectSuggestion = (profile: ProfileResult) => {
+    // Self vs creator route
+    let isSelf = false;
+    try {
+      const publicId = localStorage.getItem('public_id') || '';
+      const email = localStorage.getItem('logged_in_email') || '';
+      const storedUsername = localStorage.getItem('username') || '';
+      const candidates = [publicId, email, storedUsername]
+        .filter(Boolean)
+        .map((v) => String(v).toLowerCase());
+      const targetIds = [profile.id, profile.name]
+        .filter(Boolean)
+        .map((v) => String(v).toLowerCase());
+      isSelf = candidates.some((c) => targetIds.includes(c));
+    } catch {
+      isSelf = false;
+    }
+    setShowSearchDropdown(false);
+    if (isSelf) {
+      navigateTo('profile');
+      return;
+    }
+    setSelectedProfile({
+      name: profile.name,
+      username: profile.id,
+      avatar: profile.avatar,
+    });
+    navigateTo('creator');
+  };
+
   // Mock data for posts
   const posts = [
     {
@@ -96,15 +189,54 @@ const MainPage: React.FC<MainPageProps> = ({ navigateTo }) => {
           <div className="text-primary font-bold text-xl">ConnectLove</div>
           <div className="flex items-center space-x-4">
             <div className="relative hidden md:block">
-              <form onSubmit={(e) => { e.preventDefault(); navigateTo('search'); }}>
+              <form
+                className="relative"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  const q = headerQuery.trim();
+                  if (q) {
+                    try {
+                      localStorage.setItem('pending_search_query', q);
+                    } catch {
+                      /* ignore */
+                    }
+                  }
+                  navigateTo('search');
+                }}
+                onFocus={() => { if (suggestions.length > 0 && headerQuery.trim()) setShowSearchDropdown(true); }}
+                onBlur={() => { window.setTimeout(() => setShowSearchDropdown(false), 120); }}
+              >
                 <input
                   type="text"
                   placeholder="Search..."
-                  className="bg-gray-100 rounded-full py-1 px-4 focus:outline-none focus:ring-2 focus:ring-primary text-sm"
+                  className="bg-gray-100 rounded-full py-1 pl-4 pr-7 focus:outline-none focus:ring-2 focus:ring-primary text-sm w-64"
+                  value={headerQuery}
+                  onChange={(e) => setHeaderQuery(e.target.value)}
                 />
-                <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <Search className="absolute right-2 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+
+                {showSearchDropdown && suggestions.length > 0 && (
+                  <div className="absolute z-50 mt-2 left-0 right-0 bg-white border border-gray-200 rounded-lg shadow-lg max-h-64 overflow-y-auto">
+                    {suggestions.map((s) => (
+                      <button
+                        key={s.id}
+                        type="button"
+                        className="w-full text-left px-3 py-2 hover:bg-gray-50 flex items-center gap-3"
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => handleSelectSuggestion(s)}
+                      >
+                        <img src={s.avatar} alt={s.name} className="w-8 h-8 rounded-full object-cover" />
+                        <div>
+                          <div className="text-sm font-medium text-gray-900">{s.name}</div>
+                          <div className="text-xs text-gray-500">@{s.id}{s.category ? ` • ${s.category}` : ''}</div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </form>
             </div>
+
             <button className="text-gray-600 hover:text-gray-900">
               <Bell className="h-5 w-5" />
             </button>

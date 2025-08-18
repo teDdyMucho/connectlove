@@ -3,7 +3,7 @@ import { Heart, Settings, Lock, User, X, Search, Bell } from 'lucide-react';
 import './creator.css';
 import ProfileDropdown from '../components/ProfileDropdown';
 import { useAuth } from '../components/AuthContext';
-import handleSupportCreator, { SupportTags } from './subscriptions';
+import handleSupportCreator from './subscriptions';
 import { supabase } from '../lib/supabaseClient';
 
 
@@ -16,12 +16,28 @@ const Creator: React.FC<CreatorProps> = ({ navigateTo }) => {
   const { selectedProfile } = useAuth();
   const [showSupportModal, setShowSupportModal] = useState(false);
   const [supportLoading, setSupportLoading] = useState(false);
-  const [supportTags, setSupportTags] = useState<SupportTags>({} as SupportTags);
+  const noopSetSupportTags = () => {};
   const [selectedTier, setSelectedTier] = useState<'Platinum' | 'Gold' | 'Silver' | 'Bronze'>('Bronze');
   const [showDropdown, setShowDropdown] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
-  // Tier is loaded from Supabase and reflected via `supportTags` map
+  // All subscriptions for the logged-in user (deduped by creator_id -> latest row)
+  const [mySubs, setMySubs] = useState<Record<string, { tier: string | null; created_at: string; following?: boolean | null }>>({});
+  const [supporterDbId, setSupporterDbId] = useState<string>('');
+  const [creatorDbId, setCreatorDbId] = useState<string>('');
+  // Toast/snackbar state
+  const [toast, setToast] = useState<string>('');
+  
+  // Normalize DB value to boolean | null (handles text 'true'/'false')
+  const asBool = (v: unknown): boolean | null => {
+    if (typeof v === 'boolean') return v;
+    if (typeof v === 'string') {
+      const s = v.trim().toLowerCase();
+      if (s === 'true') return true;
+      if (s === 'false') return false;
+    }
+    return null;
+  };
   
   // If selected profile is the logged-in user, redirect to own profile
   useEffect(() => {
@@ -84,6 +100,37 @@ const Creator: React.FC<CreatorProps> = ({ navigateTo }) => {
     }
   };
 
+  // Unfollow action: only flip following flag, keep any existing tier intact
+  const onUnfollowNow = async () => {
+    const supporterId = localStorage.getItem('public_id') || localStorage.getItem('logged_in_email') || '';
+    const creatorId = selectedProfile?.username || selectedProfile?.name || '';
+    if (!supporterId || !creatorId) {
+      alert('Missing supporter or creator identity. Please sign in and try again.');
+      return;
+    }
+    const supporterName = localStorage.getItem('username') || localStorage.getItem('logged_in_email') || '';
+    const creatorName = selectedProfile?.name || selectedProfile?.username || '';
+    await handleSupportCreator({
+      supporterId,
+      creatorId,
+      selectedTier: mySubs[creatorDbId || '']?.tier || '', // do not change tier; backend should ignore if unchanged
+      supporterName,
+      creatorName,
+      setSupportTags: noopSetSupportTags,
+      setLoading: setSupportLoading,
+      following: false,
+      onSuccess: () => {
+        if (creatorDbId) {
+          setMySubs((prev) => ({
+            ...(prev || {}),
+            [creatorDbId]: { tier: prev?.[creatorDbId]?.tier ?? null, created_at: new Date().toISOString(), following: false },
+          }));
+        }
+        setToast('Unfollowed');
+      },
+    });
+  };
+
   // Load existing tier that the current supporter used to subscribe to this creator
   useEffect(() => {
     const loadExistingTier = async () => {
@@ -100,16 +147,16 @@ const Creator: React.FC<CreatorProps> = ({ navigateTo }) => {
           : await resolveUserId(creatorIdentifier);
         if (!uuidLike(supporterId) || !uuidLike(creatorId)) return;
 
-        // Query latest active support record to get current tier
+        // Pull a small window of recent rows so we can:
+        // - take following from the latest row
+        // - take tier from the latest NON-NULL tier row
         const { data, error } = await supabase
           .from('supports')
-          .select('tier, status, created_at')
+          .select('tier, created_at, following')
           .eq('supporter_id', supporterId)
           .eq('creator_id', creatorId)
-          .eq('status', 'active')
           .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle();
+          .limit(25);
 
         if (error) {
           // Non-fatal; just log for debugging
@@ -117,11 +164,25 @@ const Creator: React.FC<CreatorProps> = ({ navigateTo }) => {
           return;
         }
 
-        type TierRow = { tier?: 'Platinum' | 'Gold' | 'Silver' | 'Bronze' } | null;
-        const row = (data as unknown) as TierRow;
-        const tier = row?.tier as string | undefined;
-        if (tier) {
-          setSupportTags((prev) => ({ ...(prev || {}), [supporterId]: tier }));
+        type TierOption = 'Platinum' | 'Gold' | 'Silver' | 'Bronze';
+        type SupportRow = { tier: TierOption | null; created_at: string; following: string | boolean | null };
+        const rows = (Array.isArray(data) ? data : []) as SupportRow[];
+        // Store resolved IDs for later use
+        setSupporterDbId(supporterId);
+        setCreatorDbId(creatorId);
+        if (rows.length > 0) {
+          const latest = rows[0];
+          const follow = asBool(latest.following);
+          // find the first non-null tier across the list (already ordered desc)
+          const tierPersisted = (rows.find(r => r.tier) || null)?.tier ?? null;
+          setMySubs((prev) => ({
+            ...(prev || {}),
+            [creatorId]: {
+              tier: tierPersisted,
+              created_at: latest.created_at || new Date().toISOString(),
+              following: follow,
+            },
+          }));
         }
       } catch (e) {
         console.warn('[supports] Failed to load tier', e);
@@ -131,6 +192,97 @@ const Creator: React.FC<CreatorProps> = ({ navigateTo }) => {
     loadExistingTier();
     // Re-run when viewing another creator
   }, [selectedProfile?.username, selectedProfile?.name]);
+
+  // Load all subscriptions for the logged-in user and dedupe by creator_id (latest only)
+  useEffect(() => {
+    const loadAllSubs = async () => {
+      if (!supporterDbId) return;
+      try {
+        const { data, error } = await supabase
+          .from('supports')
+          .select('creator_id, tier, created_at, following')
+          .eq('supporter_id', supporterDbId)
+          .order('created_at', { ascending: false });
+        if (error) {
+          console.warn('[supports] loadAllSubs error:', error.message);
+          return;
+        }
+        type TierOption = 'Platinum' | 'Gold' | 'Silver' | 'Bronze';
+        type SupportRow = { creator_id: string; tier: TierOption | null; created_at: string; following: string | boolean | null };
+        const rows = (data as SupportRow[]) || [];
+        const map: Record<string, { tier: TierOption | null; created_at: string; following?: boolean | null }> = {};
+        for (const row of rows) {
+          const id = row.creator_id;
+          if (!map[id]) {
+            // initialize with latest row's created_at and following
+            map[id] = {
+              tier: row.tier ?? null,
+              created_at: row.created_at,
+              following: asBool(row.following),
+            };
+          }
+          // backfill tier if currently null and we encounter a non-null tier in older rows
+          if (map[id].tier === null && row.tier) {
+            map[id].tier = row.tier;
+          }
+        }
+        setMySubs(map);
+      } catch (e) {
+        console.warn('[supports] Failed to load subscriptions', e);
+      }
+    };
+    loadAllSubs();
+  }, [supporterDbId]);
+
+  // Realtime: update only the 'following' field on backend changes
+  useEffect(() => {
+    if (!supporterDbId || !creatorDbId) return;
+
+    type SupportsRow = {
+      creator_id?: string;
+      following?: string | boolean | null;
+      created_at?: string;
+    };
+
+    const channel = supabase
+      .channel(`supports-${supporterDbId}-${creatorDbId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'supports', filter: `supporter_id=eq.${supporterDbId}` },
+        (payload) => {
+          const row = (payload.new ?? payload.old) as SupportsRow | undefined;
+          if (!row || row.creator_id !== creatorDbId) return;
+
+          if (payload.eventType === 'DELETE') {
+            setMySubs((prev) => ({
+              ...(prev || {}),
+              [creatorDbId]: {
+                tier: prev?.[creatorDbId]?.tier ?? null,
+                created_at: prev?.[creatorDbId]?.created_at ?? new Date().toISOString(),
+                following: null,
+              },
+            }));
+            return;
+          }
+
+          const follow = asBool(row.following ?? null);
+          setMySubs((prev) => ({
+            ...(prev || {}),
+            [creatorDbId]: {
+              tier: prev?.[creatorDbId]?.tier ?? null, // do not change tier via realtime
+              created_at: row.created_at || new Date().toISOString(),
+              following: follow,
+            },
+          }));
+        }
+      );
+
+    channel.subscribe();
+    return () => {
+      channel.unsubscribe();
+      supabase.removeChannel(channel);
+    };
+  }, [supporterDbId, creatorDbId]);
 
   const onSupportNow = async () => {
     const supporterId = localStorage.getItem('public_id') || localStorage.getItem('logged_in_email') || '';
@@ -147,17 +299,61 @@ const Creator: React.FC<CreatorProps> = ({ navigateTo }) => {
       selectedTier,
       supporterName,
       creatorName,
-      setSupportTags,
+      setSupportTags: noopSetSupportTags,
       setLoading: setSupportLoading,
       onSuccess: () => {
         setShowSupportModal(false);
+        // Optimistically update local subscriptions map to avoid duplicates
+        if (creatorDbId) {
+          setMySubs((prev) => ({
+            ...(prev || {}),
+            // Auto-follow on subscribe/upgrade: reflect immediately in UI
+            [creatorDbId]: { tier: selectedTier, created_at: new Date().toISOString(), following: true },
+          }));
+        }
+        setToast('Support updated');
       },
     });
   };
 
-  // Read current tag for this supporter (if any) to reflect state and avoid unused lint
-  const getSupporterKey = () => localStorage.getItem('public_id') || localStorage.getItem('logged_in_email') || '';
-  const currentTag = supportTags[getSupporterKey() || ''];
+  // Follow action when there is no subscription tier yet
+  const onFollowNow = async () => {
+    const supporterId = localStorage.getItem('public_id') || localStorage.getItem('logged_in_email') || '';
+    const creatorId = selectedProfile?.username || selectedProfile?.name || '';
+    if (!supporterId || !creatorId) {
+      alert('Missing supporter or creator identity. Please sign in and try again.');
+      return;
+    }
+    const supporterName = localStorage.getItem('username') || localStorage.getItem('logged_in_email') || '';
+    const creatorName = selectedProfile?.name || selectedProfile?.username || '';
+    await handleSupportCreator({
+      supporterId,
+      creatorId,
+      selectedTier: '', // no tier for follow-only
+      supporterName,
+      creatorName,
+      setSupportTags: noopSetSupportTags,
+      setLoading: setSupportLoading,
+      following: true,
+      onSuccess: () => {
+        if (creatorDbId) {
+          setMySubs((prev) => ({
+            ...(prev || {}),
+            [creatorDbId]: { tier: prev?.[creatorDbId]?.tier ?? null, created_at: new Date().toISOString(), following: true },
+          }));
+        }
+        setToast('Now following');
+      },
+    });
+  };
+
+  // Current tier for this creator (type-safe normalization)
+  const rawTier = creatorDbId ? mySubs[creatorDbId]?.tier : undefined;
+  const currentTag: 'Platinum' | 'Gold' | 'Silver' | 'Bronze' | undefined =
+    rawTier === 'Platinum' || rawTier === 'Gold' || rawTier === 'Silver' || rawTier === 'Bronze'
+      ? rawTier
+      : undefined;
+  const isFollowing = creatorDbId ? !!mySubs[creatorDbId]?.following : false;
 
   const toggleDropdown = () => {
     setShowDropdown(!showDropdown);
@@ -184,76 +380,23 @@ const Creator: React.FC<CreatorProps> = ({ navigateTo }) => {
     };
   }, []);
 
-  // User data: prefer selected profile from context, fallback to defaults
-  const userData = {
-    name: selectedProfile?.name || 'Creator',
-    username: selectedProfile?.username ? `@${selectedProfile.username}` : '@creator',
-    bio: selectedProfile?.bio || 'Welcome to my profile! 🎉',
-    supporters: selectedProfile?.supporters || '0',
-    posts: 89,
-    rating: selectedProfile?.rating ?? 4.8
-  };
-  const authorName = userData.name;
+  // Auto-dismiss toast
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(''), 2500);
+    return () => clearTimeout(t);
+  }, [toast]);
 
-  // Mock posts data
-  const posts = [
-    {
-      id: 1,
-      author: 'Sarah Johnson',
-      timeAgo: '2 hours ago',
-      content: '',
-      likes: 24,
-      locked: true
-    },
-    {
-      id: 2,
-      author: 'Sarah Johnson',
-      timeAgo: '5 hours ago',
-      content: 'Just finished an amazing workout session! 💪 Who wants to join me for tomorrow\'s session?',
-      likes: 42,
-      locked: false
-    },
-    {
-      id: 3,
-      author: 'Sarah Johnson',
-      timeAgo: '1 day ago',
-      content: '',
-      likes: 18,
-      locked: true
-    },
-    {
-      id: 4,
-      author: 'Sarah Johnson',
-      timeAgo: '1 day ago',
-      content: '',
-      likes: 18,
-      locked: true
-    },
-    {
-      id: 5,
-      author: 'Sarah Johnson',
-      timeAgo: '1 day ago',
-      content: '',
-      likes: 18,
-      locked: false
-    },
-    {
-      id: 6,
-      author: 'Sarah Johnson',
-      timeAgo: '1 day ago',
-      content: '',
-      likes: 18,
-      locked: true
-    },
-    {
-        id: 7,
-        author: 'Sarah Johnson',
-        timeAgo: '1 day ago',
-        content: '',
-        likes: 1000,
-        locked: true
-      }
-  ];
+  // Profile display values from selectedProfile (no mock defaults)
+  const displayName = selectedProfile?.name || '';
+  const displayUsername = selectedProfile?.username ? `@${selectedProfile.username}` : '';
+  const displayBio = selectedProfile?.bio || '';
+  const displaySupporters = selectedProfile?.supporters || '0';
+  const displayRating = selectedProfile?.rating;
+  const authorName = displayName;
+
+  // Posts: real data not wired yet; show empty state instead of mock
+  const posts: Array<{ id: number; author: string; timeAgo?: string; content?: string; likes?: number; locked?: boolean }> = [];
 
   const handleBackToFeed = () => {
     if (navigateTo) {
@@ -323,47 +466,73 @@ const Creator: React.FC<CreatorProps> = ({ navigateTo }) => {
             <div className="absolute bottom-1 right-1 w-6 h-5 bg-green-500 rounded-full border-2 border-white pulse-animation"></div>
           </div>
           
-          <h1 className="text-xl font-bold text-center text-gray-800">{userData.name}</h1>
-          <p className="text-primary text-sm mb-2">{userData.username}</p>
-          <p className="text-gray-600 text-sm text-center mb-4">{userData.bio}</p>
+          <h1 className="text-xl font-bold text-center text-gray-800">{displayName || ' '}</h1>
+          <p className="text-primary text-sm mb-2">{displayUsername}</p>
+          <p className="text-gray-600 text-sm text-center mb-4">{displayBio}</p>
           
           <div className="flex justify-center space-x-6 w-full mb-6">
             <div className="text-center">
-              <div className="text-xl font-bold text-gray-800">{userData.supporters}</div>
+              <div className="text-xl font-bold text-gray-800">{displaySupporters}</div>
               <div className="text-gray-500 text-xs">Supporters</div>
             </div>
             <div className="text-center">
-              <div className="text-xl font-bold text-gray-800">{userData.posts}</div>
+              <div className="text-xl font-bold text-gray-800">0</div>
               <div className="text-gray-500 text-xs">Posts</div>
             </div>
             <div className="text-center">
-              <div className="text-xl font-bold text-gray-800">{userData.rating}</div>
+              <div className="text-xl font-bold text-gray-800">{typeof displayRating === 'number' ? displayRating : '-'}</div>
               <div className="text-gray-500 text-xs">Rating</div>
             </div>
           </div>
           
-          <div className="supporter-badges flex flex-wrap justify-center gap-2 mb-6">
-            <div className="supporter-badge bg-purple-600 text-white rounded-full p-1 shadow-sm">
-              <span className="inline-block w-6 h-6 rounded-full flex items-center justify-center font-bold">P</span>
+          {/* Show only one tier badge for this creator if subscribed AND following */}
+          {currentTag && isFollowing ? (
+            <div className="supporter-badges flex flex-wrap justify-center gap-2 mb-6">
+              {(() => {
+                const tier = String(currentTag);
+                const t = tier.toLowerCase();
+                const badge = t.startsWith('p') ? 'P' : t.startsWith('g') ? 'G' : t.startsWith('s') ? 'S' : 'B';
+                const cls =
+                  badge === 'P' ? 'bg-purple-600 text-white' :
+                  badge === 'G' ? 'bg-yellow-500 text-yellow-900' :
+                  badge === 'S' ? 'bg-gray-400 text-gray-800' :
+                                  'bg-amber-700 text-amber-200';
+                return (
+                  <div className={`supporter-badge ${cls} rounded-full p-1 shadow-sm`}>
+                    <span className="inline-block w-6 h-6 rounded-full flex items-center justify-center font-bold">{badge}</span>
+                  </div>
+                );
+              })()}
             </div>
-            <div className="supporter-badge bg-yellow-500 text-yellow-900 rounded-full p-1 shadow-sm">
-              <span className="inline-block w-6 h-6 rounded-full flex items-center justify-center font-bold">G</span>
-            </div>
-            <div className="supporter-badge bg-gray-400 text-gray-800 rounded-full p-1 shadow-sm">
-              <span className="inline-block w-6 h-6 rounded-full flex items-center justify-center font-bold">S</span>
-            </div>
-            <div className="supporter-badge bg-amber-700 text-amber-200 rounded-full p-1 shadow-sm">
-              <span className="inline-block w-6 h-6 rounded-full flex items-center justify-center font-bold">B</span>
-            </div>
-          </div>
+          ) : (
+            <div className="mb-6" />
+          )}
           
           <button 
             onClick={() => setShowSupportModal(true)}
             className="w-full bg-primary hover:bg-primary-dark text-white font-semibold rounded-full px-6 py-2 flex items-center justify-center transition-colors mb-4"
           >
             <Heart className="h-4 w-4 mr-2" />
-            Support Creator
+            {isFollowing && currentTag ? 'Upgrade Subscription' : 'Support Creator'}
           </button>
+          {/* Follow/Unfollow control (independent of subscription tier) */}
+          {
+            !isFollowing ? (
+              <button
+                onClick={onFollowNow}
+                className="w-full bg-white border border-primary text-primary hover:bg-primary/5 font-semibold rounded-full px-6 py-2 flex items-center justify-center transition-colors mb-4"
+              >
+                Follow
+              </button>
+            ) : (
+              <button
+                onClick={onUnfollowNow}
+                className="w-full bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 font-medium rounded-full px-6 py-2 flex items-center justify-center transition-colors mb-4"
+              >
+                Unfollow
+              </button>
+            )
+          }
           
           <div className="flex justify-center space-x-8 w-full pt-4 border-t border-gray-200">
             <button className="flex items-center text-gray-500 hover:text-primary">
@@ -393,7 +562,9 @@ const Creator: React.FC<CreatorProps> = ({ navigateTo }) => {
 
           {/* Posts Feed */}
           <div className="posts-feed space-y-4 pb-20">
-            {posts.map(post => (
+            {posts.length === 0 ? (
+              <div className="text-center text-gray-500 py-8">No posts yet</div>
+            ) : posts.map(post => (
               <div key={post.id} className="post bg-white rounded-lg overflow-hidden shadow-sm">
                 <div className="p-4">
                   <div className="flex items-center">
@@ -452,9 +623,9 @@ const Creator: React.FC<CreatorProps> = ({ navigateTo }) => {
               <X className="h-5 w-5" />
             </button>
             
-            <h2 className="text-xl font-bold text-center mb-2 text-gray-800">Support {userData.name}</h2>
+            <h2 className="text-xl font-bold text-center mb-2 text-gray-800">Support {displayName || 'Creator'}</h2>
             <p className="text-gray-600 text-center text-sm mb-1">Choose your support level and earn exclusive benefits!</p>
-            {currentTag ? (
+            {currentTag && isFollowing ? (
               <p className="text-xs text-center text-primary mb-3">Your current tier: {currentTag}</p>
             ) : (
               <p className="text-xs text-center text-gray-400 mb-3">No active tier yet</p>
@@ -530,6 +701,13 @@ const Creator: React.FC<CreatorProps> = ({ navigateTo }) => {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Toast / Snackbar */}
+      {toast && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-sm px-4 py-2 rounded-full shadow-lg z-[100]">
+          {toast}
         </div>
       )}
     </div>

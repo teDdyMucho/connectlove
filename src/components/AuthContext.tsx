@@ -25,8 +25,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const saved = localStorage.getItem('userType') as UserType | null;
     return saved || 'creator';
   });
-  // selected profile to view on creator page
-  const [selectedProfile, setSelectedProfile] = useState<SelectedProfile | null>(null);
+  // selected profile to view on creator page (persist to localStorage)
+  const [selectedProfile, setSelectedProfile] = useState<SelectedProfile | null>(() => {
+    try {
+      const raw = localStorage.getItem('selectedProfile');
+      return raw ? (JSON.parse(raw) as SelectedProfile) : null;
+    } catch {
+      return null;
+    }
+  });
 
   // Update localStorage when state changes
   useEffect(() => {
@@ -40,6 +47,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     localStorage.setItem('userType', userType);
   }, [userType]);
+
+  // Persist selectedProfile whenever it changes
+  useEffect(() => {
+    try {
+      if (selectedProfile) {
+        localStorage.setItem('selectedProfile', JSON.stringify(selectedProfile));
+      } else {
+        localStorage.removeItem('selectedProfile');
+      }
+    } catch {
+      /* ignore */
+    }
+  }, [selectedProfile]);
 
   // Auth methods
   const login = () => setIsAuthenticated(true);

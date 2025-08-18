@@ -16,6 +16,7 @@ export interface HandleSupportCreatorParams {
   onSuccess?: () => void;
   onError?: (message: string) => void;
   webhookUrl?: string; // optional override
+  following?: boolean; // optional follow action
 }
 
 const DEFAULT_WEBHOOK = 'https://primary-production-6722.up.railway.app/webhook/b6898404-3957-48ad-b8a8-b3ba30e1a9ab';
@@ -31,6 +32,7 @@ export async function handleSupportCreator({
   onSuccess,
   onError,
   webhookUrl,
+  following,
 }: HandleSupportCreatorParams): Promise<void> {
   const url = webhookUrl || DEFAULT_WEBHOOK;
   try {
@@ -90,16 +92,34 @@ export async function handleSupportCreator({
       return;
     }
 
+    // Build request body while avoiding unintended DB mutations:
+    // - Only include 'tier' when subscribing/upgrading (selectedTier truthy).
+    // - For follow/unfollow (explicit boolean), DO NOT include 'tier'.
+    // - Only include 'following' when it should change; otherwise omit it.
+    const requestBody: Record<string, unknown> = {
+      supporter_id: supporterDbId,
+      creator_id: creatorDbId,
+      supporter_name: supporterName || null,
+      creator_name: creatorName || null,
+    };
+
+    if (selectedTier) {
+      requestBody.tier = selectedTier; // subscribe/upgrade flow
+      // On subscribe/upgrade, auto-follow unless explicitly overridden
+      if (typeof following === 'boolean') {
+        requestBody.following = following;
+      } else {
+        requestBody.following = true;
+      }
+    } else if (typeof following === 'boolean') {
+      // Follow/unfollow only; do not send tier
+      requestBody.following = following;
+    }
+
     const res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify({
-        supporter_id: supporterDbId,
-        creator_id: creatorDbId,
-        tier: selectedTier,
-        supporter_name: supporterName || null,
-        creator_name: creatorName || null,
-      }),
+      body: JSON.stringify(requestBody),
     });
 
     if (!res.ok) {

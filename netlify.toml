@@ -1,0 +1,9 @@
+[build]
+  command = "vite build"
+  publish = "dist"
+
+# SPA fallback so client-side routing works on Netlify
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

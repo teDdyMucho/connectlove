@@ -4,6 +4,8 @@ import './creator.css';
 import ProfileDropdown from '../components/ProfileDropdown';
 import { useAuth } from '../components/AuthContext';
 import handleSupportCreator, { SupportTags } from './subscriptions';
+import { supabase } from '../lib/supabaseClient';
+
 
 
 interface CreatorProps {
@@ -19,6 +21,7 @@ const Creator: React.FC<CreatorProps> = ({ navigateTo }) => {
   const [showDropdown, setShowDropdown] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
+  // Tier is loaded from Supabase and reflected via `supportTags` map
   
   // If selected profile is the logged-in user, redirect to own profile
   useEffect(() => {
@@ -40,6 +43,95 @@ const Creator: React.FC<CreatorProps> = ({ navigateTo }) => {
     }
   }, [selectedProfile, navigateTo]);
 
+  // Helper: read local identity (email or public_id)
+  const getLocalIdentity = () =>
+    localStorage.getItem('public_id') || localStorage.getItem('logged_in_email') || '';
+
+  // Helper: best-effort resolve to DB user id using the same strategy as `subscriptions.tsx`
+  const uuidLike = (v: string) => /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i.test(v);
+  const resolveUserId = async (identifier: string): Promise<string> => {
+    try {
+      // Email
+      if (identifier.includes('@')) {
+        const { data } = await supabase
+          .from('users')
+          .select('id')
+          .eq('email', identifier)
+          .maybeSingle();
+        if (data?.id) return data.id as string;
+      }
+      // Username
+      {
+        const { data } = await supabase
+          .from('users')
+          .select('id')
+          .eq('username', identifier)
+          .maybeSingle();
+        if (data?.id) return data.id as string;
+      }
+      // Direct id
+      {
+        const { data } = await supabase
+          .from('users')
+          .select('id')
+          .eq('id', identifier)
+          .maybeSingle();
+        if (data?.id) return data.id as string;
+      }
+      return identifier; // fallback
+    } catch {
+      return identifier;
+    }
+  };
+
+  // Load existing tier that the current supporter used to subscribe to this creator
+  useEffect(() => {
+    const loadExistingTier = async () => {
+      try {
+        const supporterIdentifier = getLocalIdentity();
+        const creatorIdentifier = selectedProfile?.username || selectedProfile?.name || '';
+        if (!supporterIdentifier || !creatorIdentifier) return;
+
+        const supporterId = uuidLike(supporterIdentifier)
+          ? supporterIdentifier
+          : await resolveUserId(supporterIdentifier);
+        const creatorId = uuidLike(creatorIdentifier)
+          ? creatorIdentifier
+          : await resolveUserId(creatorIdentifier);
+        if (!uuidLike(supporterId) || !uuidLike(creatorId)) return;
+
+        // Query latest active support record to get current tier
+        const { data, error } = await supabase
+          .from('supports')
+          .select('tier, status, created_at')
+          .eq('supporter_id', supporterId)
+          .eq('creator_id', creatorId)
+          .eq('status', 'active')
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (error) {
+          // Non-fatal; just log for debugging
+          console.warn('[supports] loadExistingTier error:', error.message);
+          return;
+        }
+
+        type TierRow = { tier?: 'Platinum' | 'Gold' | 'Silver' | 'Bronze' } | null;
+        const row = (data as unknown) as TierRow;
+        const tier = row?.tier as string | undefined;
+        if (tier) {
+          setSupportTags((prev) => ({ ...(prev || {}), [supporterId]: tier }));
+        }
+      } catch (e) {
+        console.warn('[supports] Failed to load tier', e);
+      }
+    };
+
+    loadExistingTier();
+    // Re-run when viewing another creator
+  }, [selectedProfile?.username, selectedProfile?.name]);
+
   const onSupportNow = async () => {
     const supporterId = localStorage.getItem('public_id') || localStorage.getItem('logged_in_email') || '';
     const creatorId = selectedProfile?.username || selectedProfile?.name || '';
@@ -47,10 +139,14 @@ const Creator: React.FC<CreatorProps> = ({ navigateTo }) => {
       alert('Missing supporter or creator identity. Please sign in and try again.');
       return;
     }
+    const supporterName = localStorage.getItem('username') || localStorage.getItem('logged_in_email') || '';
+    const creatorName = selectedProfile?.name || selectedProfile?.username || '';
     await handleSupportCreator({
       supporterId,
       creatorId,
       selectedTier,
+      supporterName,
+      creatorName,
       setSupportTags,
       setLoading: setSupportLoading,
       onSuccess: () => {

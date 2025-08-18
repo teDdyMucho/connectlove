@@ -7,7 +7,7 @@ import './messages.css';
 
 declare global {
   interface Window {
-    handleSelectConversation?: (id: string) => void;
+    handleSelectConversation?: (id: string, name?: string, otherUserId?: string) => void;
   }
 }
 
@@ -265,11 +265,12 @@ const Messages: React.FC<MessagesProps> = ({ navigateTo }) => {
       }));
       setMessages(formatted);
 
-      if (activeConv && formatted.length) {
+      if (formatted.length) {
         const last = formatted[formatted.length - 1];
         const base = isImageUrl(last.text) ? 'Sent a photo' : last.text;
         const preview = last.sender === 'user' ? `You, ${base}` : base;
-        setActiveConv({ ...activeConv, lastMessage: preview, time: last.time });
+        // Preserve the currently selected conversation header (name/avatar), only update preview/time
+        setActiveConv((prev) => (prev ? { ...prev, lastMessage: preview, time: last.time } : prev));
       }
     } catch (e) {
       console.error('fetchLatestMessages error:', e);
@@ -305,41 +306,45 @@ const Messages: React.FC<MessagesProps> = ({ navigateTo }) => {
     return { conversationId: inserted.conversation_id, created: true };
   };
 
-  const handleSelectConversation = async (id: string) => {
+  const handleSelectConversation = async (id: string, passedName?: string, passedOtherUserId?: string) => {
     try {
-      let conversationId: string | null = null;
-      let otherUserId: string | null = null;
+      let conversationId: string | null = id || null;
+      let otherUserId: string | null = passedOtherUserId || null;
 
       const currentUserUuid = await resolveUserId(currentUserId);
       if (!currentUserUuid) return;
 
-      const { data: convById } = await supabase
-        .from('conversations')
-        .select('conversation_id, participant1_id, participant2_id')
-        .eq('conversation_id', id)
-        .maybeSingle();
+      // If we don't have otherUserId yet, fetch minimal conversation info
+      if (!otherUserId) {
+        const { data: convById } = await supabase
+          .from('conversations')
+          .select('conversation_id, participant1_id, participant2_id')
+          .eq('conversation_id', id)
+          .maybeSingle();
 
-      if (convById?.conversation_id) {
-        conversationId = convById.conversation_id;
-        otherUserId =
-          convById.participant1_id === currentUserUuid
-            ? convById.participant2_id
-            : convById.participant1_id;
-      } else {
-        otherUserId = id;
-        const ensured = await ensureConversationWith(otherUserId);
-        conversationId = ensured.conversationId;
+        if (convById?.conversation_id) {
+          conversationId = convById.conversation_id;
+          otherUserId =
+            convById.participant1_id === currentUserUuid
+              ? convById.participant2_id
+              : convById.participant1_id;
+        }
       }
 
       if (!conversationId || !otherUserId) return;
 
-      const { name } = await fetchUserBasic(otherUserId);
+      // Use passed name immediately for instant header; if it's missing or placeholder, fetch now
+      let resolvedName = passedName;
+      if (!resolvedName || resolvedName === 'Loading...' || resolvedName === 'Unknown User') {
+        const { name } = await fetchUserBasic(otherUserId);
+        resolvedName = name;
+      }
 
       setActiveConversationId(conversationId);
       setActiveConv({
         id: conversationId,
         otherUserId,
-        name,
+        name: resolvedName || 'Unknown User',
         avatar: '',
         lastMessage: 'Loading messages...',
         time: new Date().toLocaleTimeString([], {
@@ -551,7 +556,7 @@ const Messages: React.FC<MessagesProps> = ({ navigateTo }) => {
           <div className="w-1/3 border-r border-gray-200">
             <MessageList
               onSelectConversation={handleSelectConversation}
-              selectedConversationId={activeConv?.id}
+              selectedConversationId={activeConversationId}
             />
           </div>
 

@@ -8,6 +8,8 @@ export interface HandleSupportCreatorParams {
   supporterId: string;
   creatorId: string;
   selectedTier: string;
+  supporterName: string;
+  creatorName: string;
   // Accepts either a full map or an updater function
   setSupportTags: (next: SupportTags | ((prev: SupportTags) => SupportTags)) => void;
   setLoading?: (loading: boolean) => void;
@@ -22,6 +24,8 @@ export async function handleSupportCreator({
   supporterId,
   creatorId,
   selectedTier,
+  supporterName,
+  creatorName,
   setSupportTags,
   setLoading,
   onSuccess,
@@ -93,6 +97,8 @@ export async function handleSupportCreator({
         supporter_id: supporterDbId,
         creator_id: creatorDbId,
         tier: selectedTier,
+        supporter_name: supporterName || null,
+        creator_name: creatorName || null,
       }),
     });
 

@@ -22,7 +22,7 @@ interface CustomWindow extends Window {
 }
 
 interface MessageListProps {
-  onSelectConversation: (id: string) => void;
+  onSelectConversation: (id: string, name?: string, otherUserId?: string) => void;
   selectedConversationId?: string;
 }
 
@@ -572,8 +572,21 @@ useEffect(() => {
       const conversationId = await getOrCreateConversationId(currentUserUuid, otherUserUuid);
       if (!conversationId) return;
 
+      // Fetch name to pass immediately for instant header update
+      let displayName: string | undefined = undefined;
+      try {
+        const { data: userInfo } = await supabase
+          .from('users')
+          .select('full_name, username')
+          .eq('id', otherUserUuid)
+          .maybeSingle();
+        displayName = userInfo?.full_name || userInfo?.username || undefined;
+      } catch {
+        // ignore; Messages will fallback fetch
+      }
+
       await addOrUpdateConversation(conversationId, otherUserUuid);
-      onSelectConversation(conversationId);
+      onSelectConversation(conversationId, displayName, otherUserUuid);
       setShowSearchResults(false);
     } catch (err) {
       console.error(err);
@@ -665,7 +678,7 @@ useEffect(() => {
               uniqueConversations.map((conv) => (
                 <div
                   key={conv.id}
-                  onClick={() => onSelectConversation(conv.id)}
+                  onClick={() => onSelectConversation(conv.id, conv.name, conv.otherUserId)}
                   className={`p-3 rounded-lg cursor-pointer transition-colors hover:bg-gray-50 ${
                     selectedConversationId === conv.id ? 'bg-gray-100/70' : ''
                   }`}

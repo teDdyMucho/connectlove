@@ -81,7 +81,7 @@ body, .profile-container, .bg-gray-50 {
 
 /* Card styling */
 .profile-card {
-  background: white;
+  background: var(--color-surface);
   border-radius: 12px;
   box-shadow: 0 4px 16px rgb(0 0 0 / 0.1);
   padding: 24px;
@@ -288,11 +288,12 @@ button:active {
 
 /* Color variables */
 :root {
-  --color-primary: #D14D72;
-  --color-primary-dark: #B8405F;
-  --color-light-accent: #FFABAB;
-  --color-medium-accent: #FCC8D1;
-  --color-background: #FEF2F4;
+  --color-primary: #ff3d6e;
+  --color-primary-dark: #c81e56;
+  --color-light-accent: #a78bfa;
+  --color-medium-accent: #f58fb1;
+  --color-background: #0d0f14;
+  --color-surface: #171a22;
 }
 
 /* ============= New layout styles ============= */
@@ -306,7 +307,7 @@ button:active {
 }
 
 .profile-sidebar {
-  background: #fff;
+  background: var(--color-surface);
   border-radius: 12px;
   box-shadow: 0 4px 16px rgb(0 0 0 / 0.08);
   padding: 24px 24px 28px;
@@ -333,7 +334,7 @@ button:active {
 }
 .stat-value {
   font-weight: 800;
-  color: #111827;
+  color: #f3f4f6;
   font-size: 1.1rem;
 }
 .stat-label {
@@ -396,7 +397,7 @@ button:active {
 .create-post-btn:hover { background: var(--color-primary-dark); }
 
 .post-card {
-  background: #fff;
+  background: var(--color-surface);
   border-radius: 12px;
   box-shadow: 0 4px 16px rgb(0 0 0 / 0.08);
   padding: 14px 16px;
@@ -423,11 +424,11 @@ button:active {
   background: var(--color-background);
   border-radius: 8px;
   padding: 16px;
-  color: #374151;
+  color: #d1d5db;
   margin: 12px 0;
 }
 .unlock-btn {
-  background: #fff;
+  background: transparent;
   color: var(--color-primary);
   border: 2px solid var(--color-primary);
   border-radius: 8px;

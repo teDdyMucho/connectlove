@@ -595,10 +595,12 @@ useEffect(() => {
 
   return (
     <div className="h-full flex flex-col">
+      {/* Title */}
       <div className="p-4 border-b border-gray-200">
         <h2 className="text-lg font-semibold text-gray-900">Messages</h2>
       </div>
 
+      {/* Search */}
       <div className="p-4 border-b border-gray-200">
         <div className="relative">
           <form onSubmit={handleSearch} className="relative w-full">
@@ -606,16 +608,17 @@ useEffect(() => {
               type="text"
               value={searchQuery}
               onChange={handleSearchInputChange}
-              placeholder="Search users..."
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+              placeholder="Search users…"
+              className="w-full pl-10 pr-10 py-2 rounded-lg bg-gray-100 border border-gray-200 focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
             />
             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
               <Search className="h-5 w-5 text-gray-400" />
             </div>
             <button
               type="submit"
-              className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-primary"
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-primary transition-colors"
               disabled={isSearching}
+              aria-label="Search"
             >
               <Search className="h-5 w-5" />
             </button>
@@ -623,6 +626,7 @@ useEffect(() => {
         </div>
       </div>
 
+      {/* List */}
       <div className="flex-1 overflow-y-auto p-2">
         {loading && uniqueConversations.length === 0 ? (
           <div className="flex justify-center items-center h-32">
@@ -642,7 +646,7 @@ useEffect(() => {
                   <div
                     key={result.id}
                     onClick={() => handleSearchResultClick(result.id)}
-                    className="p-3 hover:bg-gray-50 rounded-lg cursor-pointer transition-colors"
+                    className="group p-3 rounded-lg cursor-pointer transition-all hover:bg-gray-50 animate-[slideFade_.24s_cubic-bezier(.4,0,.2,1)_both]"
                   >
                     <div className="flex items-center">
                       {result.avatar ? (
@@ -656,9 +660,9 @@ useEffect(() => {
                           <User className="h-6 w-6 text-gray-500" />
                         </div>
                       )}
-                      <div className="ml-3 flex-1">
+                      <div className="ml-3 flex-1 min-w-0">
                         <div className="flex justify-between items-center">
-                          <h3 className="text-sm font-semibold text-gray-900">{result.name}</h3>
+                          <h3 className="text-sm font-semibold text-gray-900 truncate">{result.name}</h3>
                           <p className="text-xs text-gray-500">{result.time}</p>
                         </div>
                         <p className="text-xs text-gray-500 truncate">{result.lastMessage}</p>
@@ -675,13 +679,15 @@ useEffect(() => {
                 <p className="text-xs mt-1">Your conversations will appear here</p>
               </div>
             ) : (
-              uniqueConversations.map((conv) => (
+              uniqueConversations.map((conv, idx) => (
                 <div
                   key={conv.id}
                   onClick={() => onSelectConversation(conv.id, conv.name, conv.otherUserId)}
-                  className={`p-3 rounded-lg cursor-pointer transition-colors hover:bg-gray-50 ${
-                    selectedConversationId === conv.id ? 'bg-gray-100/70' : ''
-                  }`}
+                  className={[
+                    "group p-3 rounded-lg cursor-pointer transition-all hover:bg-gray-50 animate-[slideFade_.24s_cubic-bezier(.4,0,.2,1)_both]",
+                    selectedConversationId === conv.id ? "bg-gray-100/70 ring-1 ring-primary/30" : ""
+                  ].join(" ")}
+                  style={{ animationDelay: `${idx * 30}ms` }}
                 >
                   <div className="flex items-center">
                     {conv.avatar ? (
@@ -695,15 +701,15 @@ useEffect(() => {
                         <User className="h-6 w-6 text-gray-500" />
                       </div>
                     )}
-                    <div className="ml-3 flex-1">
+                    <div className="ml-3 flex-1 min-w-0">
                       <div className="flex justify-between items-center">
-                        <h3 className="text-sm font-semibold text-gray-900">{conv.name}</h3>
+                        <h3 className="text-sm font-semibold text-gray-900 truncate">{conv.name}</h3>
                         <p className="text-xs text-gray-500">{conv.time}</p>
                       </div>
                       <div className="flex justify-between items-center">
                         <p className="text-xs text-gray-500 truncate">{conv.lastMessage}</p>
                         {conv.unread > 0 && (
-                          <span className="bg-primary text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
+                          <span className="ml-2 bg-primary text-white text-xs rounded-full h-5 w-5 flex items-center justify-center animate-[wiggle_.6s_ease]">
                             {conv.unread}
                           </span>
                         )}

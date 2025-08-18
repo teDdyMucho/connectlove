@@ -4,11 +4,13 @@
 
 @layer base {
   :root {
-    --color-primary: #D14D72;
-    --color-primary-dark: #B8405F;
-    --color-light-accent: #FFABAB;
-    --color-medium-accent: #FCC8D1;
-    --color-background: #FEF2F4;
+    /* Softer, user-friendly dark palette */
+    --color-primary: #ff3d6e; /* softer pink */
+    --color-primary-dark: #c81e56; /* deeper but not harsh */
+    --color-light-accent: #a78bfa; /* lighter violet */
+    --color-medium-accent: #f58fb1; /* gentle pink accent */
+    --color-background: #0d0f14; /* slightly lighter for eye comfort */
+    --color-surface: #171a22; /* elevated surface */
   }
 }
 
@@ -115,4 +117,39 @@ textarea:focus {
 /* Custom gradient */
 .gradient-primary {
   background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-medium-accent) 100%);
+}
+
+/* Base dark theme text colors (non-breaking) */
+html, body {
+  background-color: var(--color-background);
+  color: #e5e7eb; /* tailwind gray-200 for readability */
+}
+
+/* Ensure headings stand out on dark backgrounds */
+h1, h2, h3, h4, h5, h6 {
+  color: #f9fafb; /* tailwind gray-50 */
+}
+
+/* Dark theme overrides for common utility classes used in components */
+.bg-white { background-color: var(--color-surface) !important; }
+.text-gray-900 { color: #f3f4f6 !important; }
+.border-gray-200 { border-color: #2e3340 !important; }
+.bg-gray-100 { background-color: #1a1d26 !important; }
+.text-gray-600 { color: #cbd5e1 !important; }
+.text-gray-400 { color: #a8b0bf !important; }
+.text-gray-500 { color: #b6becd !important; }
+.text-gray-800 { color: #e5e7eb !important; }
+.bg-gray-50 { background-color: #161922 !important; }
+.bg-gray-200 { background-color: #202532 !important; }
+.text-gray-700 { color: #e2e8f0 !important; }
+.border-gray-300 { border-color: #3a4152 !important; }
+
+/* Form fields readability on dark */
+input, textarea, select {
+  background-color: var(--color-surface);
+  color: #e5e7eb;
+  border-color: #3a4152;
+}
+input::placeholder, textarea::placeholder {
+  color: #94a3b8;
 }

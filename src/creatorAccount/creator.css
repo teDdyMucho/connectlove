@@ -159,11 +159,11 @@ button.bg-primary:hover::before {
 
 /* Add color variables as RGB for animations */
 :root {
-    --color-primary: #D14D72;
-    --color-primary-dark: #B8405F;
-    --color-light-accent: #FFABAB;
-    --color-medium-accent: #FCC8D1;
-    --color-background: #FEF2F4;
+    --color-primary: #E11D48;
+    --color-primary-dark: #9F1239;
+    --color-light-accent: #F472B6;
+    --color-medium-accent: #BE185D;
+    --color-background: #0b0b12;
 }
 
 /* Unlock content button glow effect */

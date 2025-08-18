@@ -139,7 +139,7 @@ const Messages: React.FC<MessagesProps> = ({ navigateTo }) => {
     return () => {
       window.handleSelectConversation = undefined;
     };
-  }, []);
+  }, );
 
   // Auto-scroll to bottom whenever messages change
   useEffect(() => {
@@ -525,7 +525,7 @@ const Messages: React.FC<MessagesProps> = ({ navigateTo }) => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="messages-page min-h-screen bg-gray-50 scroll-smooth">
       {/* Header */}
       <header className="bg-white shadow-sm sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -538,68 +538,71 @@ const Messages: React.FC<MessagesProps> = ({ navigateTo }) => {
             </div>
             <button
               onClick={() => navigateTo('main')}
-              className="text-gray-600 hover:text-primary transition-colors"
+              className="text-gray-600 hover:text-primary transition-colors duration-150"
             >
               Back to Home
             </button>
           </div>
         </div>
       </header>
-
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         <div
-          className="flex bg-white rounded-lg shadow-lg overflow-hidden"
+          className="messenger-pane flex rounded-xl shadow-xl overflow-hidden transition-shadow duration-200 hover:shadow-2xl"
           style={{ height: 'calc(100vh - 120px)' }}
         >
           {/* Sidebar */}
-          <div className="w-1/3 border-r border-gray-200">
+          <aside className="w-1/3 border-r border-gray-200">
+            <div className="p-3 border-b border-gray-200">
+              <h2 className="text-sm font-semibold text-gray-600 tracking-wide">Conversations</h2>
+            </div>
             <MessageList
               onSelectConversation={handleSelectConversation}
               selectedConversationId={activeConversationId}
             />
-          </div>
-
+          </aside>
+  
           {/* Chat Window */}
-          <div className="w-2/3 flex flex-col">
+          <section className="w-2/3 flex flex-col">
             {/* Chat Header */}
-            <div className="p-4 border-b border-gray-200 flex justify-between items-center">
+            <div className="py-10 px-6 pb-5 border-b border-gray-200 flex justify-between items-center">
               <div className="flex items-center">
-                {activeConv?.avatar ? (
-                  <img
-                    src={activeConv.avatar}
-                    alt={activeConv?.name}
-                    className="h-10 w-10 rounded-full object-cover"
-                  />
-                ) : (
-                  <div className="h-10 w-10 rounded-full bg-gray-200 flex items-center justify-center">
-                    <User className="h-5 w-5 text-gray-500" />
-                  </div>
-                )}
+                <div className="relative">
+                  {activeConv?.avatar ? (
+                    <img
+                      src={activeConv.avatar}
+                      alt={activeConv?.name}
+                      className="h-12 w-10 rounded-full object-cover transition-transform duration-200 motion-safe:hover:scale-105 avatar-frame"
+                    />
+                  ) : (
+                    <div className="h-10 w-10 rounded-full bg-gray-200 flex items-center justify-center avatar-frame">
+                      <User className="h-5 w-5 text-gray-500" />
+                    </div>
+                  )}
+                  <span className="avatar-dot" aria-hidden></span>
+                </div>
                 <div className="ml-3">
-                  <h3 className="text-sm font-semibold text-gray-900">
+                  <h3 className="text-sm font-semibold text-gray-900 leading-tight">
                     {activeConv?.name || 'Select a chat'}
                   </h3>
                 </div>
               </div>
-              <button className="text-gray-500 hover:text-gray-700">
+              <button className="text-gray-500 hover:text-gray-700 transition-colors duration-150">
                 <MoreVertical className="h-5 w-5" />
               </button>
             </div>
-
+  
             {/* Chat Messages */}
             <div
-              className="flex-1 p-4 overflow-y-auto no-anim"
+              className="chat-surface flex-1 p-4 overflow-y-auto no-anim scroll-smooth"
               style={{ height: 'calc(100vh - 264px)' }}
             >
               {messages.map((message) => (
                 <div
                   key={message.id}
                   className={`mb-4 flex ${
-                    message.sender === 'user'
-                      ? 'justify-end'
-                      : 'justify-start'
-                  }`}
+                    message.sender === 'user' ? 'justify-end' : 'justify-start'
+                  } animate-slide-fade`}
                 >
                   {message.sender === 'other' && (
                     <div className="mr-2">
@@ -607,90 +610,89 @@ const Messages: React.FC<MessagesProps> = ({ navigateTo }) => {
                         <img
                           src={activeConv.avatar}
                           alt={activeConv?.name}
-                          className="h-8 w-8 rounded-full object-cover"
+                          className="h-8 w-8 rounded-full object-cover transition-transform duration-200 motion-safe:hover:scale-105 avatar-frame"
                         />
                       ) : (
-                        <div className="h-8 w-8 rounded-full bg-gray-200 flex items-center justify-center">
+                        <div className="h-8 w-8 rounded-full bg-gray-200 flex items-center justify-center avatar-frame">
                           <User className="h-4 w-4 text-gray-500" />
                         </div>
                       )}
                     </div>
                   )}
+  
                   <div
-                    className={`max-w-xs px-4 py-2 rounded-lg ${
+                    className={[
+                      "bubble max-w-[58ch] px-4 py-2 transition-all duration-200 will-change-transform",
                       message.sender === 'user'
-                        ? 'bg-primary text-white'
-                        : 'bg-gray-100 text-gray-800'
-                    }`}
+                        ? "bubble--me bg-primary text-white"
+                        : "bubble--other bg-gray-100 text-gray-800"
+                    ].join(" ")}
                   >
                     {isImageUrl(message.text) ? (
                       <a href={message.text} target="_blank" rel="noreferrer">
                         <img
                           src={message.text}
                           alt="sent image"
-                          className="max-h-64 max-w-full rounded-md mb-1"
+                          className="max-h-64 max-w-full rounded-md mb-1 transition-transform duration-200 motion-safe:hover:scale-[1.01]"
                         />
                       </a>
                     ) : (
                       <p className="text-sm break-words whitespace-pre-wrap">{message.text}</p>
                     )}
-                    <p
-                      className={`text-xs mt-1 ${
-                        message.sender === 'user'
-                          ? 'text-primary-light'
-                          : 'text-gray-500'
-                      }`}
-                    >
-                      {message.time}
-                    </p>
+                    <span className="time-chip">{message.time}</span>
                   </div>
                 </div>
               ))}
-
+  
               {/* Auto-scroll anchor */}
               <div ref={messagesEndRef} />
-
+  
               {!messages.length && (
                 <div className="h-full w-full flex items-center justify-center text-sm text-gray-400">
-                  {activeConv
-                    ? 'No messages yet. Say hi!'
-                    : 'Select a conversation'}
+                  {activeConv ? 'No messages yet. Say hi!' : 'Select a conversation'}
                 </div>
               )}
             </div>
-
-            {/* Input Box */}
-            <div className="p-4 border-t border-gray-200">
+  
+            {/* Composer */}
+            <div className="composer p-4 border-t border-gray-200">
               <div className="flex items-center">
                 <button
-                  className="text-gray-500 hover:text-gray-700 mr-2 disabled:opacity-50"
+                  className="icon-btn mr-2 text-gray-300 hover:text-white bg-[#141825] ring-1 ring-[rgba(255,61,110,.25)]"
                   onClick={handleAttachClick}
                   disabled={!activeConv || uploadingImage}
                   title={uploadingImage ? 'Uploading…' : 'Attach image'}
                 >
                   <Paperclip className="h-5 w-5" />
                 </button>
+  
                 <div className="flex-1 relative">
                   <textarea
                     value={newMessage}
                     onChange={(e) => setNewMessage(e.target.value)}
                     onKeyPress={handleKeyPress}
-                    placeholder="Type a message..."
-                    className="w-full pl-4 pr-10 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent resize-none"
+                    placeholder="Type a message…"
+                    className="input-glass w-full pl-4 pr-12 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent resize-none transition-shadow duration-150 shadow-sm focus:shadow"
                     rows={1}
                   />
-                  <button className="absolute right-3 top-2 text-gray-500 hover:text-gray-700">
+                  <button
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-200 transition-colors duration-150"
+                    aria-label="Emoji"
+                  >
                     <Smile className="h-5 w-5" />
                   </button>
                 </div>
+  
                 <button
                   onClick={sendMessage}
-                  className="ml-2 bg-primary text-white p-2 rounded-full hover:bg-primary-dark transition-colors disabled:opacity-50"
+                  className="icon-btn ml-2 bg-primary text-white hover:bg-primary-dark"
                   disabled={!newMessage.trim() || !activeConv || uploadingImage}
+                  aria-label="Send"
                 >
                   <Send className="h-5 w-5" />
                 </button>
-                {/* Hidden file input for image uploads */}
+  
+                {/* Hidden file input */}
                 <input
                   ref={fileInputRef}
                   type="file"
@@ -700,11 +702,11 @@ const Messages: React.FC<MessagesProps> = ({ navigateTo }) => {
                 />
               </div>
             </div>
-          </div>
+          </section>
         </div>
       </div>
     </div>
-  );
+  );  
 };
 
 export default Messages;

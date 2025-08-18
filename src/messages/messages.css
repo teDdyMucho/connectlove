@@ -2,9 +2,54 @@
 
 /* Primary color variables */
 :root {
-  --color-primary: #ff4b91;
-  --color-primary-dark: #e6337c;
-  --color-primary-light: #ffb3d1;
+  --color-primary: #ff3d6e;
+  --color-primary-dark: #c81e56;
+  --color-primary-light: #f58fb1;
+}
+
+/* Page-scoped palette and utility overrides so Messages uses messages.css (not global) */
+.messages-page {
+  /* Page background */
+  background-color: #0f1218;
+}
+
+.messages-page .bg-white { background-color: #141825 !important; }
+.messages-page .text-gray-900 { color: #f3f5fa !important; }
+.messages-page .border-gray-200 { border-color: #2e3340 !important; }
+.messages-page .border-gray-300 { border-color: #3a4152 !important; }
+.messages-page .bg-gray-50 { background-color: #161922 !important; }
+.messages-page .bg-gray-100 { background-color: #1a1d26 !important; }
+.messages-page .bg-gray-200 { background-color: #202532 !important; }
+.messages-page .text-gray-800 { color: #e5e7eb !important; }
+.messages-page .text-gray-700 { color: #e2e8f0 !important; }
+.messages-page .text-gray-600 { color: #d5dbe6 !important; }
+.messages-page .text-gray-500 { color: #cdd4df !important; }
+.messages-page .text-gray-400 { color: #b8c0ce !important; }
+
+/* Handle Tailwind opacity variant like bg-gray-100/70 for selected item */
+.messages-page [class*="bg-gray-100/"] { background-color: #232938 !important; }
+
+/* Search input: dark surface, clear text & placeholder */
+.messages-page input[type="text"] {
+  background-color: #141825;
+  color: #e6eaf2;
+  border-color: #3a4152;
+}
+.messages-page input[type="text"]::placeholder { color: #9aa3b2; }
+.messages-page input[type="text"]:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(255,61,110,0.25);
+  border-color: var(--color-primary);
+}
+
+/* Conversation list item elevation and hover */
+.messages-page .cursor-pointer.rounded-lg {
+  box-shadow: 0 1px 0 rgba(255,255,255,0.02) inset, 0 6px 16px rgba(0,0,0,0.22);
+  transition: transform 0.18s ease, box-shadow 0.18s ease, background-color 0.2s ease;
+}
+.messages-page .cursor-pointer.rounded-lg:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 1px 0 rgba(255,255,255,0.03) inset, 0 10px 26px rgba(0,0,0,0.32);
 }
 
 /* Message bubble animations */
@@ -33,18 +78,53 @@
   width: 6px;
 }
 
+/* ============ Elegant message bubble polish ============ */
+/* Subtle elevation and hover lift */
+.messages-page .no-anim .bg-primary,
+.messages-page .no-anim .bg-gray-100 {
+  box-shadow: 0 6px 18px rgba(0,0,0,0.25), 0 1px 0 rgba(255,255,255,0.02) inset;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, background-color 0.2s ease;
+}
+
+.messages-page .no-anim .bg-primary:hover,
+.messages-page .no-anim .bg-gray-100:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 28px rgba(0,0,0,0.35), 0 1px 0 rgba(255,255,255,0.03) inset;
+}
+
+/* Timestamp chips inside bubbles */
+.messages-page .no-anim .bg-primary p.text-xs {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  background: rgba(255,255,255,0.14);
+  color: #fff5f8;
+}
+
+.messages-page .no-anim .bg-gray-100 p.text-xs {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  background: rgba(167,139,250,0.16);
+}
+
+/* Slightly stronger message text weight for readability */
+.messages-page .no-anim .rounded-lg p.text-sm {
+  font-weight: 500;
+}
+
 .overflow-y-auto::-webkit-scrollbar-track {
-  background: #f1f1f1;
+  background: #1a1a23;
   border-radius: 10px;
 }
 
 .overflow-y-auto::-webkit-scrollbar-thumb {
-  background: #ddd;
+  background: #2a2a34;
   border-radius: 10px;
 }
 
 .overflow-y-auto::-webkit-scrollbar-thumb:hover {
-  background: #ccc;
+  background: var(--color-primary);
 }
 
 /* Responsive adjustments */
@@ -69,6 +149,149 @@
   
   .border-r {
     border-right: none;
-    border-bottom: 1px solid #e5e7eb;
+    border-bottom: 1px solid #2a2a34;
   }
 }
+/* ===============================
+   ✨ Messenger UI Polish (add-on)
+   =============================== */
+
+/* Subtle glass + gradient container */
+.messages-page .messenger-pane {
+  background: linear-gradient(180deg, rgba(20,24,37,0.9) 0%, rgba(20,24,37,0.96) 100%);
+  backdrop-filter: saturate(120%) blur(4px);
+}
+
+/* Slide-fade animation for rows/messages */
+@keyframes slideFade {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.animate-slide-fade { animation: slideFade .24s cubic-bezier(.4,0,.2,1) both; }
+
+/* Shimmer utility for avatar/image skeletons */
+@keyframes shimmer {
+  0% { background-position: -450px 0; }
+  100% { background-position: 450px 0; }
+}
+.messages-page .shimmer {
+  background: linear-gradient(90deg, #1a1f2d 0%, #232a3b 40%, #1a1f2d 80%);
+  background-size: 900px 100%;
+  animation: shimmer 1.2s infinite linear;
+}
+
+/* Selected conversation highlight */
+.messages-page .conv-selected {
+  box-shadow: inset 0 0 0 1px rgba(255,61,110,.35), 0 10px 26px rgba(0,0,0,0.32);
+}
+
+/* Unread badge micro-wiggle */
+@keyframes wiggle {
+  0%, 100% { transform: translateY(0) rotate(0); }
+  25% { transform: translateY(-1px) rotate(-2deg); }
+  75% { transform: translateY(-1px) rotate(2deg); }
+}
+.messages-page .badge-unread {
+  animation: wiggle .2s ease-in-out infinite;
+}
+/* --- Avatar frame + online dot --- */
+.messages-page .avatar-frame {
+  position: relative;
+  box-shadow: 0 0 0 2px #1a1f2d, 0 0 0 4px rgba(255,61,110,.12);
+  transition: transform .18s ease, box-shadow .18s ease;
+}
+.messages-page .avatar-frame:hover { transform: translateY(-1px) }
+.messages-page .avatar-dot {
+  position: absolute; right: -2px; bottom: -2px;
+  width: 10px; height: 10px; border-radius: 9999px;
+  background: #34d399; box-shadow: 0 0 0 2px #141825;
+}
+
+/* --- Bubble tails + elevated surfaces --- */
+.messages-page .bubble {
+  position: relative;
+  border-radius: 14px;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.25), 0 1px 0 rgba(255,255,255,0.02) inset;
+}
+.messages-page .bubble--me::after,
+.messages-page .bubble--other::after {
+  content: ""; position: absolute; bottom: -2px; width: 10px; height: 10px; transform: rotate(45deg);
+}
+.messages-page .bubble--me::after    { right: 10px; background: var(--color-primary); }
+.messages-page .bubble--other::after { left: 10px;  background: #1a1d26; }
+
+/* Keep bubble hover subtle */
+.messages-page .bubble:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 28px rgba(0,0,0,0.35), 0 1px 0 rgba(255,255,255,0.03) inset;
+}
+
+/* --- Timestamp chip inside bubbles --- */
+.messages-page .time-chip {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  margin-top: 4px;
+  font-size: 10.5px;
+  background: rgba(255,255,255,0.14);
+  color: #fff5f8;
+}
+.messages-page .bubble--other .time-chip {
+  background: rgba(167,139,250,0.16);
+  color: #cdd4df;
+}
+
+/* --- Input glass style (textarea) --- */
+.messages-page .input-glass {
+  background-color: #141825;
+  color: #e6eaf2;
+  border: 1px solid #3a4152;
+  transition: box-shadow .18s ease, border-color .18s ease, background-color .18s ease;
+}
+.messages-page .input-glass::placeholder { color: #9aa3b2; }
+.messages-page .input-glass:focus {
+  background-color: #141825;
+  box-shadow: 0 0 0 2px rgba(255,61,110,0.25);
+  border-color: var(--color-primary);
+}
+/* Fix: Tailwind bg-white/xx variants showing light bar on dark theme */
+.messages-page [class*="bg-white/"] { background-color: #141825 !important; }
+
+/* Composer bar + input wrapper */
+.messages-page .composer {
+  background-color: #141825;
+  border-top: 1px solid #2e3340;
+}
+.messages-page .icon-btn {
+  width: 40px; height: 40px; border-radius: 9999px;
+  display:flex; align-items:center; justify-content:center;
+  transition: transform .15s ease, box-shadow .15s ease, background-color .15s ease, color .15s ease;
+}
+.messages-page .icon-btn:hover { transform: translateY(-1px); box-shadow: 0 8px 20px rgba(255,61,110,.25); }
+
+/* Chat surface subtle gradient */
+.messages-page .chat-surface {
+  background:
+    radial-gradient(1200px 600px at 80% -10%, rgba(255,61,110,.06), transparent 60%),
+    linear-gradient(180deg, #0f1218, #0f1218);
+}
+
+/* Bubble tails + alignment adjustments */
+.messages-page .bubble { border-radius: 14px; }
+.messages-page .bubble--me { background: var(--color-primary); color:#fff; }
+.messages-page .bubble--other { background: #1a1d26; color:#e5e7eb; }
+
+.messages-page .bubble--me::after,
+.messages-page .bubble--other::after {
+  content: ""; position: absolute; bottom: -2px; width: 10px; height: 10px; transform: rotate(45deg);
+}
+.messages-page .bubble--me::after    { right: 6px; background: var(--color-primary); }
+.messages-page .bubble--other::after { left: 6px;  background: #1a1d26; }
+
+/* Timestamp chip spacing (slightly larger for legibility) */
+.messages-page .time-chip { margin-top: 6px; }
+
+/* Selected conversation contrast boost */
+.messages-page .conv-selected { background-color:#232938 !important; border-color:#3a4152 !important; }
+
+

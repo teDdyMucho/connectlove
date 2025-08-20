@@ -2,13 +2,14 @@
 
 /* Color variables */
 :root {
-    --color-primary: #ff3d6e;
-    --color-primary-dark: #c81e56;
-    --color-light-accent: #a78bfa;
-    --color-medium-accent: #f58fb1;
-    --color-background: #0f1218;
+    --color-primary: #ff3d6e; /* softer pink */
+    --color-primary-dark: #c81e56; /* deeper but not harsh */
+    --color-light-accent: #a78bfa; /* lighter violet */
+    --color-medium-accent: #ff3d6e; /* gentle pink accent */
+    --color-background: #0d0f14; /* slightly lighter for eye comfort */
+    --color-surface: #171a22; /* elevated surface */
     /* Optional tweak: a slightly brighter variant used for glows */
-    --color-primary-bright: #ff5a88;
+    --color-primary-bright: #ff3d6e;
 }
 
 /* Custom transitions for smoother interactions */

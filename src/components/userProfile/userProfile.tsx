@@ -2,6 +2,9 @@ import React, { useEffect, useState } from 'react';
 import '../userProfile/userProfile.css';
 import { supabase } from '../../lib/supabaseClient';
 import { useAuth } from '../AuthContext';
+import CreatorDashboard from '../creatorDashboard/CreatorDashboard';
+import UserPost from './userPost';
+import UserImageGallery from './userImageGallery';
 
 type ProfileInfo = {
   email: string | null;
@@ -12,6 +15,8 @@ type ProfileInfo = {
   posts?: number | null;
   rating?: number | null;
   phone_number?: string | null;
+  user_id?: string | null;
+  id?: string | null;
   user_type?: string | null;
   avatar_url?: string | null;
 };
@@ -27,6 +32,16 @@ const UserProfile: React.FC<UserProfileProps> = ({ publicId }) => {
   const { navigateTo } = useAuth();
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [activeTab, setActiveTab] = useState<'Post' | 'Picture' | 'Videos' | 'Streaming'>('Post');
+  
+  // Dashboard state - check localStorage for persistence
+  const [showCreatorDashboard, setShowCreatorDashboard] = useState(() => {
+    try {
+      return localStorage.getItem('show_creator_dashboard') === 'true';
+    } catch {
+      return false;
+    }
+  });
 
   useEffect(() => {
     let mounted = true;
@@ -51,6 +66,14 @@ const UserProfile: React.FC<UserProfileProps> = ({ publicId }) => {
           }
         })();
 
+      console.log('Effective ID for profile fetch:', effectiveId);
+      console.log('localStorage values:', {
+        public_id: localStorage.getItem('public_id'),
+        logged_in_email: localStorage.getItem('logged_in_email'),
+        current_user_id: localStorage.getItem('current_user_id'),
+        viewing_user_id: localStorage.getItem('viewing_user_id')
+      });
+
       if (!effectiveId) {
         setError('No public ID provided.');
         setLoading(false);
@@ -59,6 +82,7 @@ const UserProfile: React.FC<UserProfileProps> = ({ publicId }) => {
 
       try {
         const { data, error } = await supabase.rpc('get_public_profile', { p_public_id: effectiveId });
+        console.log('RPC get_public_profile response:', { data, error });
 
         if (!mounted) return;
 
@@ -66,15 +90,23 @@ const UserProfile: React.FC<UserProfileProps> = ({ publicId }) => {
 
         if (error) {
           // keep error for now; we will attempt a fallback
+          console.error('Error from get_public_profile:', error.message);
           setError(error.message);
         } else if (data) {
+          console.log('Profile data returned:', data);
           if (Array.isArray(data)) {
             if (data.length > 0) {
               resolvedProfile = data[0] as ProfileInfo;
+              console.log('Resolved profile from array:', resolvedProfile);
+            } else {
+              console.log('Data is an empty array');
             }
           } else {
             resolvedProfile = data as ProfileInfo;
+            console.log('Resolved profile from object:', resolvedProfile);
           }
+        } else {
+          console.log('No data returned from get_public_profile');
         }
 
         if (!resolvedProfile) {
@@ -91,25 +123,35 @@ const UserProfile: React.FC<UserProfileProps> = ({ publicId }) => {
           }
 
           if (emailFallback) {
+            console.log('Using email fallback:', emailFallback);
             const { data: userRow, error: userErr } = await supabase
               .from('users')
-              .select('email, full_name, username, phone_number, user_type')
+              .select('id, email, full_name, username, phone_number, user_type')
               .eq('email', emailFallback)
               .maybeSingle();
+
+            console.log('User lookup by email result:', { userRow, userErr });
 
             if (!mounted) return;
 
             if (!userErr && userRow) {
               resolvedProfile = {
+                id: userRow.id ?? null,
+                user_id: userRow.id ?? null, // Explicitly set user_id from id
                 email: userRow.email ?? null,
                 full_name: userRow.full_name ?? null,
                 username: userRow.username ?? null,
                 phone_number: userRow.phone_number ?? null,
                 user_type: userRow.user_type ?? null,
               };
+              console.log('Created profile from user row:', resolvedProfile);
               // Clear any previous RPC error since fallback succeeded
               setError(null);
+            } else {
+              console.log('No user found with email:', emailFallback);
             }
+          } else {
+            console.log('No email fallback available');
           }
         }
 
@@ -119,14 +161,37 @@ const UserProfile: React.FC<UserProfileProps> = ({ publicId }) => {
           try {
             const stored = localStorage.getItem('avatar_url');
             setAvatarUrl(resolvedProfile?.avatar_url || stored || null);
+            
+            // Store critical user identifiers in localStorage
             if (resolvedProfile?.username) {
               localStorage.setItem('username', resolvedProfile.username);
             }
             if (resolvedProfile?.full_name) {
               localStorage.setItem('full_name', resolvedProfile.full_name);
             }
-          } catch {
+            
+            // Store user_id in localStorage for post fetching
+            if (resolvedProfile?.user_id) {
+              console.log('Storing user_id in localStorage:', resolvedProfile.user_id);
+              localStorage.setItem('current_user_id', resolvedProfile.user_id);
+              localStorage.setItem('public_id', resolvedProfile.user_id);
+            } else if (resolvedProfile?.id) {
+              console.log('Storing id as user_id in localStorage:', resolvedProfile.id);
+              localStorage.setItem('current_user_id', resolvedProfile.id);
+              localStorage.setItem('public_id', resolvedProfile.id);
+            }
+            
+            // If we have an email, store the mapping
+            if (resolvedProfile?.email && (resolvedProfile?.user_id || resolvedProfile?.id)) {
+              const userId = resolvedProfile.user_id || resolvedProfile.id;
+              if (userId) {
+                console.log(`Storing user_id mapping for email ${resolvedProfile.email}:`, userId);
+                localStorage.setItem(`user_id_for_${resolvedProfile.email}`, userId);
+              }
+            }
+          } catch (err) {
             // ignore storage errors
+            console.error('Error storing profile data in localStorage:', err);
           }
         } else if (!error) {
           // Only set a generic error if one hasn't already been set above
@@ -171,6 +236,18 @@ const UserProfile: React.FC<UserProfileProps> = ({ publicId }) => {
     }
   };
 
+  
+  // Toggle creator dashboard
+  const handleToggleCreatorDashboard = () => {
+    const newState = !showCreatorDashboard;
+    setShowCreatorDashboard(newState);
+    try {
+      localStorage.setItem('show_creator_dashboard', newState.toString());
+    } catch {
+      // Ignore storage errors
+    }
+  };
+  
   // simple helpers for display
   const formatNumber = (n?: number | null) => {
     if (n === null || n === undefined) return '—';
@@ -184,54 +261,79 @@ const UserProfile: React.FC<UserProfileProps> = ({ publicId }) => {
   const posts = profile?.posts ?? undefined;
   const rating = profile?.rating ?? undefined;
 
+  // Show loading or error states
+  if (loading) {
+    return (
+      <div className="profile-layout">
+        <div className="loading-indicator">
+          <div className="spinner"></div>
+          <p>Loading profile...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error && !profile) {
+    return (
+      <div className="profile-layout">
+        <div className="error-message">
+          <p>Error loading profile: {error}</p>
+          <button 
+            className="back-btn"
+            onClick={() => navigateTo('main')}
+          >
+            ← Back to Main Page
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="profile-layout">
-      {/* Left sidebar: profile card */}
-      <aside className="profile-sidebar">
-        <button
-          type="button"
-          className="back-btn"
-          onClick={(e) => {
-            e.preventDefault();
-            navigateTo('main');
-          }}
-        >
-          ← Back
-        </button>
+    <>
+      {showCreatorDashboard && profile ? (
+        <CreatorDashboard 
+          profile={profile} 
+          onBack={handleToggleCreatorDashboard}
+        />
+      ) : (
+        <div className="profile-layout">
+          {/* Left sidebar: profile card */}
+          <aside className="profile-sidebar">
+            <button
+              type="button"
+              className="back-btn"
+              onClick={(e) => {
+                e.preventDefault();
+                navigateTo('main');
+              }}
+            >
+              ← Back
+            </button>
 
-        <div className="avatar-container">
-          {avatarUrl ? (
-            <img className="avatar" src={avatarUrl} alt="avatar" />
-          ) : (
-            <div className="avatar default-avatar" aria-label="default avatar" />
-          )}
-          {!avatarUrl && (
-            <label className={`avatar-plus ${isUploading ? 'disabled' : ''}`} title="Upload avatar">
-              <input
-                type="file"
-                accept="image/*"
-                className="hidden-file-input"
-                onChange={onAvatarChange}
-                disabled={isUploading}
-              />
-              +
-            </label>
-          )}
-        </div>
-        <div className="title-block">
-          <h2 className="title">{displayName}</h2>
-          {handle && <p className="subtitle">{handle}</p>}
-        </div>
-
-        {loading && <div className="state info">Loading profile…</div>}
-        {error && !loading && <div className="state error">{error}</div>}
-
-        {!loading && !error && (
-          <>
-            <p className="bio-text">
-              {profile?.bio || 'Share something about yourself to let your supporters know you better!'}
-            </p>
-
+            <div className="avatar-container">
+              {avatarUrl ? (
+                <img className="avatar" src={avatarUrl} alt="avatar" />
+              ) : (
+                <div className="avatar default-avatar" aria-label="default avatar" />
+              )}
+              {!avatarUrl && (
+                <label className={`avatar-plus ${isUploading ? 'disabled' : ''}`} title="Upload avatar">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden-file-input"
+                    onChange={onAvatarChange}
+                    disabled={isUploading}
+                  />
+                  +
+                </label>
+              )}
+            </div>
+            <div className="title-block">
+              <h2 className="title">{displayName}</h2>
+              {handle && <p className="subtitle">{handle}</p>}
+            </div>
             <div className="stats-row">
               <div className="stat">
                 <div className="stat-value">{formatNumber(supporters)}</div>
@@ -254,21 +356,146 @@ const UserProfile: React.FC<UserProfileProps> = ({ publicId }) => {
               <span className="badge">B</span>
             </div>
 
-            <button className="support-btn bg-primary">Join as a Creator</button>
+            <button 
+              className="support-btn bg-primary"
+              onClick={() => {
+                if (profile?.user_type === 'creator') {
+                  setShowCreatorDashboard(true);
+                } else if (profile?.user_type === 'subscriber') {
+                  // Handle subscriber action if needed
+                } else {
+                  // Handle join as creator action
+                }
+              }}
+            >
+              {profile?.user_type === 'creator' ? 'Creator Dashboard' : 
+               profile?.user_type === 'subscriber' ? 'Manage Subscription' : 
+               'Join as a Creator'}
+            </button>
 
             <div className="quick-links">
               <button className="link-btn">Settings</button>
               <button className="link-btn">Privacy</button>
             </div>
-          </>
-        )}
-      </aside>
+          </aside>
 
-      {/* Right column: feed */}
-      <main className="profile-feed">
-        <button className="create-post-btn">+ Create New Post</button>
-      </main>
-    </div>
+          {/* Right column: feed */}
+          <main className="profile-feed">
+            {/* Navigation tabs */}
+            <div className="profile-nav">
+              <div 
+                className={`profile-nav-tab ${activeTab === 'Post' ? 'active' : ''}`}
+                onClick={() => setActiveTab('Post')}
+              >
+                Post
+              </div>
+              <div 
+                className={`profile-nav-tab ${activeTab === 'Picture' ? 'active' : ''}`}
+                onClick={() => setActiveTab('Picture')}
+              >
+                Picture
+              </div>
+              <div 
+                className={`profile-nav-tab ${activeTab === 'Videos' ? 'active' : ''}`}
+                onClick={() => setActiveTab('Videos')}
+              >
+                Videos
+              </div>
+              <div 
+                className={`profile-nav-tab ${activeTab === 'Streaming' ? 'active' : ''}`}
+                onClick={() => setActiveTab('Streaming')}
+              >
+                Streaming
+              </div>
+            </div>
+            
+            {/* Content area */}
+            <div className="profile-content overflow-y-auto" style={{ maxHeight: 'calc(100vh - 200px)' }}>
+              {activeTab === 'Post' && (
+                <>
+                  {console.log('Profile data:', profile)}
+                  {console.log('User ID being passed to UserPost:', profile?.user_id || profile?.id || 'undefined')}
+                  
+                  <UserPost 
+                    userId={profile?.user_id || profile?.id || undefined} 
+                  />
+                </>
+              )}
+              
+              {activeTab === 'Picture' && (
+                <>
+                  {console.log('User ID being passed to UserImageGallery:', profile?.user_id || profile?.id || 'undefined')}
+                  <UserImageGallery userId={profile?.user_id || profile?.id || undefined} />
+                </>
+              )}
+              
+              {activeTab === 'Videos' && (
+                <div className="post-card pr-1 pb-4">
+                  <div className="media-grid-header">
+                    <div className="media-grid-title">Recent Videos</div>
+                    <div className="media-grid-action">View All</div>
+                  </div>
+                  
+                  <div className="media-grid max-h-[300px] overflow-y-auto pr-1" style={{ scrollbarWidth: 'thin', scrollbarColor: '#ff3d6e #f1f1f1' }}>
+                    <div className="media-item video">
+                      <img src="https://images.unsplash.com/photo-1536240478700-b869070f9279?w=500&auto=format&fit=crop&q=60" alt="Video 1" />
+                    </div>
+                    <div className="media-item video">
+                      <img src="https://images.unsplash.com/photo-1682687982360-3bbc6b668d3b?w=500&auto=format&fit=crop&q=60" alt="Video 2" />
+                    </div>
+                    <div className="media-item video locked">
+                      {/* Locked video content */}
+                    </div>
+                  </div>
+                  
+                  <div className="media-grid-header">
+                    <div className="media-grid-title">Popular Videos</div>
+                    <div className="media-grid-action">Sort By</div>
+                  </div>
+                  
+                  <div className="media-grid max-h-[300px] overflow-y-auto pr-1" style={{ scrollbarWidth: 'thin', scrollbarColor: '#ff3d6e #f1f1f1' }}>
+                    <div className="media-item video">
+                      <img src="https://images.unsplash.com/photo-1682695796954-bad0d0f59ff1?w=500&auto=format&fit=crop&q=60" alt="Popular Video 1" />
+                    </div>
+                    <div className="media-item video">
+                      <img src="https://images.unsplash.com/photo-1682687218147-9806132dc697?w=500&auto=format&fit=crop&q=60" alt="Popular Video 2" />
+                    </div>
+                    <div className="media-item video">
+                      <img src="https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?w=500&auto=format&fit=crop&q=60" alt="Popular Video 3" />
+                    </div>
+                    <div className="media-item video locked">
+                      {/* Locked premium video */}
+                    </div>
+                    <div className="media-item video locked">
+                      {/* Locked premium video */}
+                    </div>
+                    <div className="media-item video">
+                      <img src="https://images.unsplash.com/photo-1465146344425-f00d5f5c8f07?w=500&auto=format&fit=crop&q=60" alt="Popular Video 4" />
+                    </div>
+                  </div>
+                </div>
+              )}
+              
+              {activeTab === 'Streaming' && (
+                <div className="post-card pr-1 pb-4">
+                  <div className="post-body">
+                    <div style={{ textAlign: 'center' }}>
+                      <div style={{ background: '#2a2d36', padding: '60px 20px', borderRadius: '8px', marginBottom: '20px', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', gap: '10px' }}>
+                        <div style={{ color: '#ff3d6e', fontSize: '24px' }}>📺 LIVE</div>
+                        <div style={{ color: '#6b7280' }}>Streaming coming soon!</div>
+                      </div>
+                      <button className="bg-primary" style={{ margin: '10px auto', display: 'block' }}>
+                        Get Notified
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </main>
+        </div>
+      )}
+    </>
   );
 };
 

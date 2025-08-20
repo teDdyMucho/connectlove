@@ -106,6 +106,32 @@ button.bg-primary:hover::before {
     height: 2.5rem;
     width: 2.5rem;
   }
+
+  .supporter-badge span {
+    font-size: 0.75rem;
+  }
+
+  /* Improve spacing on mobile */
+  .creator-page {
+    padding-bottom: env(safe-area-inset-bottom, 0);
+  }
+
+  /* Adjust modal content for smaller screens */
+  .supporter-badges {
+    gap: 0.5rem;
+  }
+}
+
+/* Small screen adjustments */
+@media (max-width: 640px) {
+  .profile-avatar {
+    width: 48px;
+    height: 48px;
+  }
+  
+  .profile-section {
+    padding: 0.75rem;
+  }
 }
 
 /* Responsive adjustments */
@@ -159,11 +185,14 @@ button.bg-primary:hover::before {
 
 /* Add color variables as RGB for animations */
 :root {
-    --color-primary: #E11D48;
-    --color-primary-dark: #9F1239;
-    --color-light-accent: #F472B6;
-    --color-medium-accent: #BE185D;
-    --color-background: #0b0b12;
+    --color-primary: #ff3d6e; /* softer pink */
+    --color-primary-dark: #c81e56; /* deeper but not harsh */
+    --color-light-accent: #a78bfa; /* lighter violet */
+    --color-medium-accent: #ff3d6e; /* gentle pink accent */
+    --color-background: #0d0f14; /* slightly lighter for eye comfort */
+    --color-surface: #171a22; /* elevated surface */
+    /* Optional tweak: a slightly brighter variant used for glows */
+    --color-primary-bright: #ff3d6e;
 }
 
 /* Unlock content button glow effect */

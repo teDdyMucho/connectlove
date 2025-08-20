@@ -248,12 +248,12 @@ const SearchProfile: React.FC<SearchProfileProps> = ({ navigateTo }) => {
   };
 
   return (
-    <div className="search-profile bg-background text-gray-900 min-h-screen flex flex-col relative pt-16">
+    <div className="search-profile bg-background text-gray-900 min-h-screen flex flex-col relative pt-14 sm:pt-16 overflow-x-hidden">
       {/* Header with Search */}
-      <header className="bg-white shadow-sm py-4 px-4 fixed top-0 left-0 right-0 z-50">
+      <header className="bg-white shadow-sm py-3 sm:py-4 px-2 sm:px-4 fixed top-0 left-0 right-0 z-50 safe-area-inset-top">
         <div className="max-w-6xl mx-auto flex items-center justify-between">
-          <div className="text-primary font-bold text-xl">ConnectLove</div>
-          <div className="flex items-center space-x-4 w-full max-w-md">
+          <div className="text-primary font-bold text-lg sm:text-xl">ConnectLove</div>
+          <div className="flex items-center space-x-2 sm:space-x-4 w-full max-w-xs sm:max-w-md mx-2 sm:mx-4">
             <form onSubmit={handleSearch} className="relative w-full"
               onFocus={() => {
                 if (suggestions.length > 0 && searchQuery.trim()) setShowDropdown(true);
@@ -267,7 +267,7 @@ const SearchProfile: React.FC<SearchProfileProps> = ({ navigateTo }) => {
               <input
                 type="text"
                 placeholder="Search profiles..."
-                className="bg-gray-100 rounded-full py-2 px-4 pr-10 w-full focus:outline-none focus:ring-2 focus:ring-primary text-sm"
+                className="bg-gray-100 rounded-full py-1.5 sm:py-2 px-3 sm:px-4 pr-8 sm:pr-10 w-full focus:outline-none focus:ring-2 focus:ring-primary text-xs sm:text-sm"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
@@ -276,28 +276,28 @@ const SearchProfile: React.FC<SearchProfileProps> = ({ navigateTo }) => {
                 className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-primary"
                 disabled={isSearching}
               >
-                <Search className="h-5 w-5" />
+                <Search className="h-4 w-4 sm:h-5 sm:w-5" />
               </button>
 
               {/* Live suggestions dropdown */}
               {showDropdown && suggestions.length > 0 && (
-                <div className="absolute z-50 mt-2 left-0 right-0 bg-white border border-gray-200 rounded-lg shadow-lg max-h-64 overflow-y-auto">
+                <div className="absolute z-50 mt-1 sm:mt-2 left-0 right-0 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 sm:max-h-64 overflow-y-auto">
                   {suggestions.map((s) => (
                     <button
                       key={s.id}
                       type="button"
-                      className="w-full text-left px-3 py-2 hover:bg-gray-50 flex items-center gap-3"
+                      className="w-full text-left px-2 sm:px-3 py-1.5 sm:py-2 hover:bg-gray-50 flex items-center gap-2 sm:gap-3"
                       onMouseDown={(e) => e.preventDefault()}
                       onClick={() => handleSelectSuggestion(s)}
                     >
                       <img
                         src={s.avatar || 'https://i.pravatar.cc/150'}
                         alt={s.name}
-                        className="w-8 h-8 rounded-full object-cover"
+                        className="w-6 h-6 sm:w-8 sm:h-8 rounded-full object-cover"
                       />
                       <div>
-                        <div className="text-sm font-medium text-gray-900">{s.name}</div>
-                        <div className="text-xs text-gray-500">@{s.id}{s.category ? ` • ${s.category}` : ''}</div>
+                        <div className="text-xs sm:text-sm font-medium text-gray-900">{s.name}</div>
+                        <div className="text-[10px] sm:text-xs text-gray-500">@{s.id}{s.category ? ` • ${s.category}` : ''}</div>
                       </div>
                     </button>
                   ))}
@@ -305,56 +305,57 @@ const SearchProfile: React.FC<SearchProfileProps> = ({ navigateTo }) => {
               )}
             </form>
           </div>
-          <div className="flex items-center space-x-4">
+          <div className="flex items-center">
             <button 
               onClick={() => navigateTo('main')} 
-              className="text-primary hover:text-primary-dark"
+              className="text-primary hover:text-primary-dark text-xs sm:text-sm whitespace-nowrap px-1 sm:px-2"
             >
-              Back to Home
+              <span className="hidden xs:inline">Back to Home</span>
+              <span className="xs:hidden">Back</span>
             </button>
           </div>
         </div>
       </header>
 
       {/* Main Content */}
-      <main className="flex-1 max-w-6xl mx-auto w-full px-4 py-6">
+      <main className="flex-1 max-w-6xl mx-auto w-full px-2 sm:px-4 py-4 sm:py-6">
         {/* Search Status */}
         {isSearching && (
-          <div className="text-center py-8">
-            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary mx-auto"></div>
-            <p className="mt-4 text-gray-600">Searching profiles...</p>
+          <div className="text-center py-6 sm:py-8">
+            <div className="animate-spin rounded-full h-8 w-8 sm:h-12 sm:w-12 border-t-2 border-b-2 border-primary mx-auto"></div>
+            <p className="mt-3 sm:mt-4 text-sm sm:text-base text-gray-600">Searching profiles...</p>
           </div>
         )}
 
         {/* Error Message */}
         {error && !isSearching && (
-          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-md mb-6">
+          <div className="bg-red-50 border border-red-200 text-red-700 px-3 sm:px-4 py-2 sm:py-3 rounded-md mb-4 sm:mb-6 text-xs sm:text-sm">
             {error}
           </div>
         )}
 
         {/* Search Results */}
         {!isSearching && searchResults.length > 0 && (
-          <div className="space-y-6">
-            <h2 className="text-xl font-semibold mb-4">Search Results</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="space-y-4 sm:space-y-6">
+            <h2 className="text-lg sm:text-xl font-semibold mb-3 sm:mb-4">Search Results</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 md:gap-6">
               {searchResults.map((profile) => (
                 <div key={profile.id} className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow">
-                  <div className="p-4">
+                  <div className="p-3 sm:p-4">
                     <div className="flex items-center">
                       <img 
                         src={profile.avatar || 'https://i.pravatar.cc/150'} 
                         alt={profile.name} 
-                        className="w-16 h-16 rounded-full object-cover mr-4"
+                        className="w-12 h-12 sm:w-16 sm:h-16 rounded-full object-cover mr-3 sm:mr-4"
                       />
-                      <div>
-                        <h3 className="font-medium text-lg">{profile.name}</h3>
+                      <div className="min-w-0">
+                        <h3 className="font-medium text-base sm:text-lg truncate">{profile.name}</h3>
                         {profile.category && (
-                          <p className="text-sm text-gray-600">{profile.category}</p>
+                          <p className="text-xs sm:text-sm text-gray-600 truncate">{profile.category}</p>
                         )}
                         {profile.rating && (
                           <div className="flex items-center text-yellow-400">
-                            <span className="text-xs mr-1">★</span>
+                            <span className="text-xs mr-0.5 sm:mr-1">★</span>
                             <span className="text-xs">{profile.rating}</span>
                           </div>
                         )}
@@ -362,16 +363,16 @@ const SearchProfile: React.FC<SearchProfileProps> = ({ navigateTo }) => {
                     </div>
                     
                     {profile.bio && (
-                      <p className="mt-3 text-sm text-gray-700">{profile.bio}</p>
+                      <p className="mt-2 sm:mt-3 text-xs sm:text-sm text-gray-700 line-clamp-2">{profile.bio}</p>
                     )}
                     
                     {profile.supporters && (
-                      <p className="mt-2 text-xs text-gray-500">{profile.supporters} supporters</p>
+                      <p className="mt-1 sm:mt-2 text-[10px] sm:text-xs text-gray-500">{profile.supporters} supporters</p>
                     )}
                     
-                    <div className="mt-4 pt-3 border-t border-gray-100 flex justify-between">
+                    <div className="mt-3 sm:mt-4 pt-2 sm:pt-3 border-t border-gray-100 flex justify-between">
                       <button
-                        className="text-primary hover:text-primary-dark text-sm font-medium"
+                        className="text-primary hover:text-primary-dark text-xs sm:text-sm font-medium"
                         onClick={() => {
                           // If the clicked profile is the logged-in user, go to own profile
                           let isSelf = false;
@@ -419,10 +420,10 @@ const SearchProfile: React.FC<SearchProfileProps> = ({ navigateTo }) => {
 
         {/* No Search Performed Yet */}
         {!isSearching && searchResults.length === 0 && !error && (
-          <div className="text-center py-12">
-            <Search className="h-16 w-16 mx-auto text-gray-300" />
-            <p className="mt-4 text-gray-600">Search for profiles to connect with</p>
-            <p className="text-sm text-gray-500">Enter a name, location, or interest</p>
+          <div className="text-center py-8 sm:py-12">
+            <Search className="h-12 w-12 sm:h-16 sm:w-16 mx-auto text-gray-300" />
+            <p className="mt-3 sm:mt-4 text-sm sm:text-base text-gray-600">Search for profiles to connect with</p>
+            <p className="text-xs sm:text-sm text-gray-500">Enter a name, location, or interest</p>
           </div>
         )}
       </main>

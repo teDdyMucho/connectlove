@@ -113,6 +113,11 @@ const MainPage: React.FC<MainPageProps> = ({ navigateTo }) => {
     setShowSearchDropdown(false);
     if (isSelf) { navigateTo('profile'); return; }
     setSelectedProfile({ name: profile.name, username: profile.id, avatar: profile.avatar });
+    // Push friendly URL for deep link
+    try {
+      const userIdForUrl = encodeURIComponent(profile.id || profile.name);
+      window.history.pushState({}, '', `/profile/${userIdForUrl}`);
+    } catch { /* noop */ }
     navigateTo('creator');
   };
 
@@ -163,19 +168,19 @@ const MainPage: React.FC<MainPageProps> = ({ navigateTo }) => {
                 />
                 <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
                 {showSearchDropdown && suggestions.length > 0 && (
-                  <div className="absolute z-50 mt-2 left-0 right-0 bg-white border border-gray-200 rounded-lg shadow-lg max-h-64 overflow-y-auto dropdown-animation">
+                  <div className="absolute z-50 mt-2 left-0 right-0 bg-slate-900 border border-slate-700 rounded-lg shadow-lg max-h-64 overflow-y-auto dropdown-animation">
                     {suggestions.map((s) => (
                       <button
                         key={s.id}
                         type="button"
-                        className="w-full text-left px-3 py-2 hover:bg-gray-50 flex items-center gap-3 transition-colors"
+                        className="w-full text-left px-3 py-2 hover:bg-slate-800 flex items-center gap-3 transition-colors text-gray-100"
                         onMouseDown={(e) => e.preventDefault()}
                         onClick={() => handleSelectSuggestion(s)}
                       >
                         <img src={s.avatar} alt={s.name} className="w-8 h-8 rounded-full object-cover" />
                         <div>
-                          <div className="text-sm font-medium text-gray-900">{s.name}</div>
-                          <div className="text-xs text-gray-500">@{s.id}{s.category ? ` • ${s.category}` : ''}</div>
+                          <div className="text-sm font-medium text-gray-100">{s.name}</div>
+                          <div className="text-xs text-gray-400">@{s.id}{s.category ? ` • ${s.category}` : ''}</div>
                         </div>
                       </button>
                     ))}
@@ -218,7 +223,7 @@ const MainPage: React.FC<MainPageProps> = ({ navigateTo }) => {
       </header>
 
       {/* Top Navigation */}
-      <div className="fixed top-12 sm:top-16 left-0 right-0 bg-white shadow-sm z-40 border-b border-gray-200">
+      <div className="fixed top-12 sm:top-16 left-0 right-0 bg-white shadow-sm z-40 border-b border-slate-700">
         <div className="max-w-6xl mx-auto px-2 sm:px-4">
           <div className="flex justify-between items-center py-1 sm:py-2 overflow-x-auto hide-scrollbar">
             <div className="flex space-x-2 sm:space-x-6">
@@ -231,14 +236,14 @@ const MainPage: React.FC<MainPageProps> = ({ navigateTo }) => {
               </a>
               <a
                 href="#"
-                className="group flex items-center py-1 sm:py-2 px-2 sm:px-3 text-gray-600 hover:text-primary hover:border-b-2 hover:border-primary transition-all duration-200 whitespace-nowrap"
+                className="group flex items-center py-1 sm:py-2 px-2 sm:px-3 text-gray-300 hover:text-primary hover:border-b-2 hover:border-primary transition-all duration-200 whitespace-nowrap"
               >
                 <Video className="h-4 w-4 sm:h-5 sm:w-5 mr-1 sm:mr-2 group-hover:scale-105 transition-transform" />
                 <span className="text-sm sm:text-base">Live Stream</span>
               </a>
               <a
                 onClick={() => navigateTo('messages')}
-                className="group flex items-center py-1 sm:py-2 px-2 sm:px-3 text-gray-600 hover:text-primary hover:border-b-2 hover:border-primary transition-all duration-200 cursor-pointer whitespace-nowrap"
+                className="group flex items-center py-1 sm:py-2 px-2 sm:px-3 text-gray-300 hover:text-primary hover:border-b-2 hover:border-primary transition-all duration-200 cursor-pointer whitespace-nowrap"
               >
                 <MessageSquare className="h-4 w-4 sm:h-5 sm:w-5 mr-1 sm:mr-2 group-hover:scale-105 transition-transform" />
                 <span className="text-sm sm:text-base">Messages</span>
@@ -253,8 +258,8 @@ const MainPage: React.FC<MainPageProps> = ({ navigateTo }) => {
         {/* Main Feed */}
         <main className="flex-1 py-4 sm:py-6 pr-0 md:pr-4" role="feed" aria-busy="false">
           {/* Composer/Search bar */}
-          <div className="bg-white rounded-lg sm:rounded-xl p-2 mb-3 sm:mb-4 flex items-center shadow-sm border border-gray-200 card-hover">
-            <button className="p-1 sm:p-2 text-gray-500 hover:text-primary transition-colors" aria-label="Add post">
+          <div className="bg-slate-900 text-gray-100 rounded-lg sm:rounded-xl p-2 mb-3 sm:mb-4 flex items-center shadow-sm border border-slate-700 card-hover">
+            <button className="p-1 sm:p-2 text-gray-400 hover:text-primary transition-colors" aria-label="Add post">
               <svg className="w-3 h-3 sm:w-4 sm:h-4" fill="currentColor" viewBox="0 0 20 20">
                 <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z" />
               </svg>
@@ -262,7 +267,7 @@ const MainPage: React.FC<MainPageProps> = ({ navigateTo }) => {
             <input
               type="text"
               placeholder="What's on your mind?"
-              className="flex-1 bg-transparent border-none focus:outline-none text-xs sm:text-sm px-2"
+              className="flex-1 bg-transparent border-none focus:outline-none text-xs sm:text-sm px-2 placeholder-gray-400 text-gray-100"
             />
             <button
               className="bg-primary text-white rounded-md w-6 h-6 sm:w-8 sm:h-8 flex items-center justify-center transition-all hover:shadow-[0_8px_26px_rgba(255,90,136,0.35)]"
@@ -287,7 +292,7 @@ const MainPage: React.FC<MainPageProps> = ({ navigateTo }) => {
 
         {/* Right Sidebar */}
         <aside className="hidden md:block md:w-60 lg:w-72 p-3 sm:p-4 mt-4 sm:mt-6">
-          <div className="bg-white rounded-xl p-3 sm:p-4 border border-gray-200 shadow-sm card-hover sticky top-28">
+          <div className="bg-slate-900 text-gray-100 rounded-xl p-3 sm:p-4 border border-slate-700 shadow-sm card-hover sticky top-28">
             <div className="flex items-center justify-between mb-3 sm:mb-4">
               <h2 className="text-base sm:text-lg font-medium">Suggested Creators</h2>
               <svg className="w-3 h-3 sm:w-4 sm:h-4 text-primary" fill="currentColor" viewBox="0 0 20 20">
@@ -297,7 +302,7 @@ const MainPage: React.FC<MainPageProps> = ({ navigateTo }) => {
 
             <div className="space-y-2 sm:space-y-3">
               {suggestedCreators.slice(0, 4).map((creator) => (
-                <div key={creator.id} className="flex items-center rounded-lg transition-colors hover:bg-gray-50/50 p-1.5 sm:p-2">
+                <div key={creator.id} className="flex items-center rounded-lg transition-colors hover:bg-slate-800 p-1.5 sm:p-2">
                   <img
                     src={creator.avatar}
                     alt={creator.name}
@@ -305,14 +310,14 @@ const MainPage: React.FC<MainPageProps> = ({ navigateTo }) => {
                   />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center">
-                      <h3 className="font-medium text-xs sm:text-sm truncate">{creator.name}</h3>
+                      <h3 className="font-medium text-xs sm:text-sm truncate text-gray-100">{creator.name}</h3>
                       <div className="ml-1 sm:ml-2 flex items-center text-yellow-400">
                         <span className="text-xs mr-0.5 sm:mr-1">★</span>
                         <span className="text-xs">{creator.rating}</span>
                       </div>
                     </div>
-                    <p className="text-xs text-gray-600 truncate">{creator.category}</p>
-                    <p className="text-xs text-gray-500">{creator.supporters} supporters</p>
+                    <p className="text-xs text-gray-400 truncate">{creator.category}</p>
+                    <p className="text-xs text-gray-400">{creator.supporters} supporters</p>
                   </div>
                 </div>
               ))}
@@ -326,24 +331,24 @@ const MainPage: React.FC<MainPageProps> = ({ navigateTo }) => {
       </div>
 
       {/* Mobile Bottom Nav */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-2 py-2 flex justify-around z-40 safe-area-inset-bottom">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-slate-900 border-t border-slate-700 px-2 py-2 flex justify-around z-40 safe-area-inset-bottom text-gray-200">
         <a href="#" className="flex flex-col items-center text-primary px-1">
           <Home className="w-5 h-5" />
           <span className="text-[10px] mt-0.5">Home</span>
         </a>
-        <a onClick={() => navigateTo('search')} className="flex flex-col items-center text-gray-600 cursor-pointer px-1">
+        <a onClick={() => navigateTo('search')} className="flex flex-col items-center text-gray-300 cursor-pointer px-1">
           <Search className="w-5 h-5" />
           <span className="text-[10px] mt-0.5">Explore</span>
         </a>
-        <a href="#" className="flex flex-col items-center text-gray-600 px-1">
+        <a href="#" className="flex flex-col items-center text-gray-300 px-1">
           <Video className="w-5 h-5" />
           <span className="text-[10px] mt-0.5">Live</span>
         </a>
-        <a onClick={() => navigateTo('messages')} className="flex flex-col items-center text-gray-600 cursor-pointer px-1">
+        <a onClick={() => navigateTo('messages')} className="flex flex-col items-center text-gray-300 cursor-pointer px-1">
           <MessageSquare className="w-5 h-5" />
           <span className="text-[10px] mt-0.5">Messages</span>
         </a>
-        <a href="#" onClick={toggleDropdown} className="flex flex-col items-center text-gray-600 hover:text-primary px-1">
+        <a href="#" onClick={toggleDropdown} className="flex flex-col items-center text-gray-300 hover:text-primary px-1">
           <User className="w-5 h-5" />
           <span className="text-[10px] mt-0.5">Profile</span>
         </a>

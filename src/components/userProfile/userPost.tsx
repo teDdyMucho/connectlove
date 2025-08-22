@@ -314,7 +314,7 @@ const UserPost: React.FC<UserPostProps> = ({ userId }) => {
       {posts.map((post, idx) => (
         <article
           key={post.id}
-          className="group bg-white rounded-lg sm:rounded-xl overflow-hidden border border-gray-200 shadow-sm hover:shadow-md transition-shadow duration-200"
+          className="group bg-slate-900 text-gray-100 rounded-lg sm:rounded-xl overflow-hidden border border-slate-700 shadow-sm hover:shadow-md transition-shadow duration-200"
           style={{ animationDelay: `${idx * 60}ms` }}
         >
           {/* Post Header */}
@@ -331,15 +331,19 @@ const UserPost: React.FC<UserPostProps> = ({ userId }) => {
             </div>
             <div className="flex-1">
               <div className="flex items-center justify-between">
-                <h3 className="font-medium text-sm sm:text-base">{userId && userId !== localStorage.getItem('public_id')
-                  ? localStorage.getItem('viewing_full_name') || localStorage.getItem('viewing_username') || 'User'
-                  : localStorage.getItem('full_name') || localStorage.getItem('username') || 'Anonymous'}</h3>
-                <span className="text-xs text-gray-500">{formatTimeAgo(post.created_at)}</span>
+                <div className="flex items-center gap-2">
+                  <h3 className="font-medium text-sm sm:text-base text-gray-100">{userId && userId !== localStorage.getItem('public_id')
+                    ? localStorage.getItem('viewing_full_name') || localStorage.getItem('viewing_username') || 'User'
+                    : localStorage.getItem('full_name') || localStorage.getItem('username') || 'Anonymous'}</h3>
+                  {post.category && (
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] sm:text-xs bg-primary/10 text-primary border border-primary/20">
+                      {post.category}
+                    </span>
+                  )}
+                </div>
+                <span className="text-xs text-gray-400">{formatTimeAgo(post.created_at)}</span>
               </div>
               <div className="text-xs text-gray-500 flex items-center">
-                {post.category && (
-                  <span className="mr-2">{post.category}</span>
-                )}
                 {post.visibility && (
                   <VisibilityIcon visibility={post.visibility} />
                 )}
@@ -352,39 +356,63 @@ const UserPost: React.FC<UserPostProps> = ({ userId }) => {
             {post.title && (
               <h3 className="font-medium text-base sm:text-lg mb-2">{post.title}</h3>
             )}
-            <p className="text-sm sm:text-base leading-relaxed">{post.content}</p>
+            <p className="text-sm sm:text-base leading-relaxed text-gray-200">{post.content}</p>
           </div>
           
           {/* Post Media */}
           {post.has_media && post.media_urls && post.media_urls.length > 0 && (
-            <div className="relative">
+            <div className="relative rounded-xl ring-1 ring-slate-700 mx-3 sm:mx-4 mb-2 sm:mb-3 overflow-hidden">
               {post.media_urls.length === 1 ? (
-                <img 
-                  src={post.media_urls[0]} 
-                  alt={`Media for ${post.title || 'post'}`}
-                  className="w-full h-60 sm:h-80 object-cover transition-transform duration-300 group-hover:scale-[1.02]"
-                  onError={(e) => {
-                    (e.target as HTMLImageElement).style.display = 'none';
-                  }}
-                  loading="lazy"
-                />
+                <>
+                  <img 
+                    src={post.media_urls[0]} 
+                    alt={`Media for ${post.title || 'post'}`}
+                    className={`${post.visibility !== 'public' ? 'blur-xl pointer-events-none select-none' : 'transition-transform duration-300 group-hover:scale-[1.02]'} w-full h-60 sm:h-80 object-cover`}
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).style.display = 'none';
+                    }}
+                    loading="lazy"
+                  />
+                  {post.visibility !== 'public' && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/40">
+                      <div className="text-center px-4">
+                        <Lock className="h-8 w-8 sm:h-12 sm:w-12 mx-auto mb-1 sm:mb-2 text-white" />
+                        <h4 className="text-base sm:text-lg font-medium text-white mb-1">Content Locked</h4>
+                        <p className="text-xs sm:text-sm text-gray-200 mb-3 sm:mb-4">Support this creator to unlock</p>
+                        <button className="bg-primary hover:bg-primary-dark text-gray-900 font-medium px-4 sm:px-6 py-1.5 sm:py-2 text-sm rounded-full transition-all hover:shadow-[0_8px_26px_rgba(255,90,136,0.35)]">Support</button>
+                      </div>
+                    </div>
+                  )}
+                </>
               ) : (
-                <div className="grid grid-cols-2 gap-1">
-                  {post.media_urls.slice(0, 4).map((url, index) => (
-                    <img 
-                      key={`${post.id}-media-${index}`}
-                      src={url} 
-                      alt={`Media ${index + 1} for ${post.title || 'post'}`}
-                      className="w-full h-40 object-cover"
-                      onError={(e) => {
-                        (e.target as HTMLImageElement).style.display = 'none';
-                      }}
-                      loading="lazy"
-                    />
-                  ))}
+                <div className="relative">
+                  <div className="grid grid-cols-2 gap-1">
+                    {post.media_urls.slice(0, 4).map((url, index) => (
+                      <img 
+                        key={`${post.id}-media-${index}`}
+                        src={url} 
+                        alt={`Media ${index + 1} for ${post.title || 'post'}`}
+                        className={`w-full h-40 object-cover ${post.visibility !== 'public' ? 'blur-xl pointer-events-none select-none' : ''}`}
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).style.display = 'none';
+                        }}
+                        loading="lazy"
+                      />
+                    ))}
+                  </div>
                   {post.media_urls.length > 4 && (
                     <div className="absolute bottom-2 right-2 bg-black/70 text-white text-xs px-2 py-1 rounded">
                       +{post.media_urls.length - 4} more
+                    </div>
+                  )}
+                  {post.visibility !== 'public' && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/40">
+                      <div className="text-center px-4">
+                        <Lock className="h-8 w-8 sm:h-12 sm:w-12 mx-auto mb-1 sm:mb-2 text-white" />
+                        <h4 className="text-base sm:text-lg font-medium text-white mb-1">Content Locked</h4>
+                        <p className="text-xs sm:text-sm text-gray-200 mb-3 sm:mb-4">Support this creator to unlock</p>
+                        <button className="bg-primary hover:bg-primary-dark text-gray-900 font-medium px-4 sm:px-6 py-1.5 sm:py-2 text-sm rounded-full transition-all hover:shadow-[0_8px_26px_rgba(255,90,136,0.35)]">Support</button>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -393,16 +421,16 @@ const UserPost: React.FC<UserPostProps> = ({ userId }) => {
           )}
           
           {/* Post Actions */}
-          <div className="px-2 sm:px-4 py-2 sm:py-3 flex items-center border-t border-gray-200 bg-white/60 backdrop-blur-[1px]">
-            <button className="flex items-center text-gray-600 hover:text-primary mr-3 sm:mr-6 transition-colors">
+          <div className="px-2 sm:px-4 py-2 sm:py-3 flex items-center border-t border-slate-700 bg-slate-900/80">
+            <button className="flex items-center text-gray-300 hover:text-primary mr-3 sm:mr-6 transition-colors">
               <Heart className="h-4 w-4 sm:h-5 sm:w-5 mr-1" />
               <span className="text-xs sm:text-sm">{post.likes_count || 0}</span>
             </button>
-            <button className="flex items-center text-gray-600 hover:text-primary mr-3 sm:mr-6 transition-colors">
+            <button className="flex items-center text-gray-300 hover:text-primary mr-3 sm:mr-6 transition-colors">
               <MessageSquare className="h-4 w-4 sm:h-5 sm:w-5 mr-1" />
               <span className="text-xs sm:text-sm">{post.comments_count || 0}</span>
             </button>
-            <button className="flex items-center text-gray-600 hover:text-primary transition-colors">
+            <button className="flex items-center text-gray-300 hover:text-primary transition-colors">
               <Share2 className="h-4 w-4 sm:h-5 sm:w-5 mr-1" />
               <span className="text-xs sm:text-sm">Share</span>
             </button>

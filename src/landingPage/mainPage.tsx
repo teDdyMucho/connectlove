@@ -134,14 +134,14 @@ const MainPage: React.FC<MainPageProps> = ({ navigateTo }) => {
   ];
 
   return (
-    <div className="main-page bg-background text-gray-900 min-h-screen flex flex-col relative scroll-smooth overflow-x-hidden">
+    <div className="main-page bg-background text-gray-100 min-h-screen flex flex-col relative scroll-smooth overflow-x-hidden">
 
       {/* Header */}
-      <header className="bg-white shadow-sm py-3 sm:py-4 px-3 sm:px-4 fixed top-0 left-0 right-0 z-50 backdrop-blur-md supports-[backdrop-filter]:bg-white/90">
+      <header className="bg-surface shadow-sm py-3 sm:py-4 px-3 sm:px-4 fixed top-0 left-0 right-0 z-50 backdrop-blur-md supports-[backdrop-filter]:bg-surface/90 border-b border-soft">
         <div className="max-w-6xl mx-auto flex items-center justify-between">
           <div className="text-primary font-bold text-lg sm:text-xl tracking-tight flex items-center">
-            <Heart className="h-5 w-5 sm:h-6 sm:w-6 mr-1 sm:mr-2 inline-block" />
-            <span className="hidden xs:inline">ConnectLove</span>
+            <Heart className="h-5 w-5 sm:h-6 sm:w-6 mr-1 sm:mr-2 inline-block" fill="currentColor" />
+            <span className="hidden xs:inline text-gray-100">ConnectLove</span>
           </div>
           <div className="flex items-center space-x-2 sm:space-x-4">
             {/* Search - Hidden on mobile, shown as icon that expands */}
@@ -162,18 +162,18 @@ const MainPage: React.FC<MainPageProps> = ({ navigateTo }) => {
                 <input
                   type="text"
                   placeholder="Search..."
-                  className="bg-gray-100 rounded-full py-2 pl-4 pr-9 text-sm w-48 sm:w-60 md:w-72 border border-gray-200 focus:border-primary/60 focus:outline-none focus:ring-0 transition-colors"
+                  className="bg-surface rounded-full py-2 pl-4 pr-9 text-sm w-48 sm:w-60 md:w-72 border border-soft focus:border-primary/60 focus:outline-none focus:ring-0 transition-colors text-gray-100"
                   value={headerQuery}
                   onChange={(e) => setHeaderQuery(e.target.value)}
                 />
                 <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
                 {showSearchDropdown && suggestions.length > 0 && (
-                  <div className="absolute z-50 mt-2 left-0 right-0 bg-slate-900 border border-slate-700 rounded-lg shadow-lg max-h-64 overflow-y-auto dropdown-animation">
+                  <div className="absolute z-50 mt-2 left-0 right-0 bg-surface border border-soft rounded-lg shadow-lg max-h-64 overflow-y-auto dropdown-animation">
                     {suggestions.map((s) => (
                       <button
                         key={s.id}
                         type="button"
-                        className="w-full text-left px-3 py-2 hover:bg-slate-800 flex items-center gap-3 transition-colors text-gray-100"
+                        className="w-full text-left px-3 py-2 hover:bg-surface-light flex items-center gap-3 transition-colors text-gray-100"
                         onMouseDown={(e) => e.preventDefault()}
                         onClick={() => handleSelectSuggestion(s)}
                       >
@@ -191,14 +191,14 @@ const MainPage: React.FC<MainPageProps> = ({ navigateTo }) => {
 
             {/* Mobile search button */}
             <button 
-              className="md:hidden text-gray-600 hover:text-primary transition-colors icon-bounce p-2"
+              className="md:hidden text-gray-300 hover:text-primary transition-colors icon-bounce p-2"
               aria-label="Search"
               onClick={() => navigateTo('search')}
             >
               <Search className="h-5 w-5" />
             </button>
 
-            <button className="text-gray-600 hover:text-primary transition-colors icon-bounce p-2" aria-label="Notifications">
+            <button className="text-gray-300 hover:text-primary transition-colors icon-bounce p-2" aria-label="Notifications">
               <Bell className="h-5 w-5" />
             </button>
 
@@ -223,7 +223,7 @@ const MainPage: React.FC<MainPageProps> = ({ navigateTo }) => {
       </header>
 
       {/* Top Navigation */}
-      <div className="fixed top-12 sm:top-16 left-0 right-0 bg-white shadow-sm z-40 border-b border-slate-700">
+      <div className="fixed top-12 sm:top-16 left-0 right-0 bg-surface shadow-sm z-40 border-b border-soft">
         <div className="max-w-6xl mx-auto px-2 sm:px-4">
           <div className="flex justify-between items-center py-1 sm:py-2 overflow-x-auto hide-scrollbar">
             <div className="flex space-x-2 sm:space-x-6">
@@ -232,21 +232,21 @@ const MainPage: React.FC<MainPageProps> = ({ navigateTo }) => {
                 className="group flex items-center py-1 sm:py-2 px-2 sm:px-3 text-primary font-medium border-b-2 border-primary transition-all duration-200 whitespace-nowrap"
               >
                 <Home className="h-4 w-4 sm:h-5 sm:w-5 mr-1 sm:mr-2 group-hover:scale-105 transition-transform" />
-                <span className="text-sm sm:text-base">Home</span>
+                <span className="text-sm sm:text-base text-gray-100">Home</span>
               </a>
               <a
                 href="#"
                 className="group flex items-center py-1 sm:py-2 px-2 sm:px-3 text-gray-300 hover:text-primary hover:border-b-2 hover:border-primary transition-all duration-200 whitespace-nowrap"
               >
                 <Video className="h-4 w-4 sm:h-5 sm:w-5 mr-1 sm:mr-2 group-hover:scale-105 transition-transform" />
-                <span className="text-sm sm:text-base">Live Stream</span>
+                <span className="text-sm sm:text-base text-gray-300">Live Stream</span>
               </a>
               <a
                 onClick={() => navigateTo('messages')}
                 className="group flex items-center py-1 sm:py-2 px-2 sm:px-3 text-gray-300 hover:text-primary hover:border-b-2 hover:border-primary transition-all duration-200 cursor-pointer whitespace-nowrap"
               >
                 <MessageSquare className="h-4 w-4 sm:h-5 sm:w-5 mr-1 sm:mr-2 group-hover:scale-105 transition-transform" />
-                <span className="text-sm sm:text-base">Messages</span>
+                <span className="text-sm sm:text-base text-gray-300">Messages</span>
               </a>
             </div>
           </div>
@@ -257,42 +257,44 @@ const MainPage: React.FC<MainPageProps> = ({ navigateTo }) => {
       <div className="flex flex-1 max-w-6xl mx-auto px-2 sm:px-4 mt-24 sm:mt-28">
         {/* Main Feed */}
         <main className="flex-1 py-4 sm:py-6 pr-0 md:pr-4" role="feed" aria-busy="false">
-          {/* Composer/Search bar */}
-          <div className="bg-slate-900 text-gray-100 rounded-lg sm:rounded-xl p-2 mb-3 sm:mb-4 flex items-center shadow-sm border border-slate-700 card-hover">
-            <button className="p-1 sm:p-2 text-gray-400 hover:text-primary transition-colors" aria-label="Add post">
-              <svg className="w-3 h-3 sm:w-4 sm:h-4" fill="currentColor" viewBox="0 0 20 20">
-                <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z" />
-              </svg>
-            </button>
-            <input
-              type="text"
-              placeholder="What's on your mind?"
-              className="flex-1 bg-transparent border-none focus:outline-none text-xs sm:text-sm px-2 placeholder-gray-400 text-gray-100"
-            />
-            <button
-              className="bg-primary text-white rounded-md w-6 h-6 sm:w-8 sm:h-8 flex items-center justify-center transition-all hover:shadow-[0_8px_26px_rgba(255,90,136,0.35)]"
-              aria-label="Create post"
-            >
-              <svg className="w-3 h-3 sm:w-4 sm:h-4" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
-              </svg>
-            </button>
-          </div>
-
-          <header className="flex items-center justify-between mb-3 sm:mb-6">
-            <h1 className="text-xl sm:text-2xl font-bold">News Feed</h1>
-            <div className="hidden sm:flex items-center">
-              <span className="text-xs sm:text-sm text-gray-600 mr-2">Support creators to unlock exclusive content</span>
+          <div className="max-w-2xl w-full mx-auto">
+            {/* Composer/Search bar */}
+            <div className="bg-surface text-gray-100 rounded-lg sm:rounded-xl p-2 mb-3 sm:mb-4 flex items-center shadow-sm border border-soft card-hover">
+              <button className="p-1 sm:p-2 text-gray-400 hover:text-primary transition-colors" aria-label="Add post">
+                <svg className="w-3 h-3 sm:w-4 sm:h-4" fill="currentColor" viewBox="0 0 20 20">
+                  <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z" />
+                </svg>
+              </button>
+              <input
+                type="text"
+                placeholder="What's on your mind?"
+                className="flex-1 bg-transparent border-none focus:outline-none text-xs sm:text-sm px-2 placeholder-gray-400 text-gray-100"
+              />
+              <button
+                className="bg-primary text-white rounded-md w-6 h-6 sm:w-8 sm:h-8 flex items-center justify-center transition-all hover:shadow-[0_8px_26px_rgba(255,90,136,0.35)]"
+                aria-label="Create post"
+              >
+                <svg className="w-3 h-3 sm:w-4 sm:h-4" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
+                </svg>
+              </button>
             </div>
-          </header>
 
-          {/* Feed Component */}
-          <Feed navigateTo={navigateTo} />
+            <header className="flex items-center justify-between mb-3 sm:mb-6">
+              <h1 className="text-xl sm:text-2xl font-bold text-gray-100">News Feed</h1>
+              <div className="hidden sm:flex items-center">
+                <span className="text-xs sm:text-sm text-gray-400 mr-2">Support creators to unlock exclusive content</span>
+              </div>
+            </header>
+
+            {/* Feed Component */}
+            <Feed navigateTo={navigateTo} />
+          </div>
         </main>
 
         {/* Right Sidebar */}
         <aside className="hidden md:block md:w-60 lg:w-72 p-3 sm:p-4 mt-4 sm:mt-6">
-          <div className="bg-slate-900 text-gray-100 rounded-xl p-3 sm:p-4 border border-slate-700 shadow-sm card-hover sticky top-28">
+          <div className="bg-surface text-gray-100 rounded-xl p-3 sm:p-4 border border-soft shadow-sm card-hover sticky top-28">
             <div className="flex items-center justify-between mb-3 sm:mb-4">
               <h2 className="text-base sm:text-lg font-medium">Suggested Creators</h2>
               <svg className="w-3 h-3 sm:w-4 sm:h-4 text-primary" fill="currentColor" viewBox="0 0 20 20">
@@ -302,7 +304,7 @@ const MainPage: React.FC<MainPageProps> = ({ navigateTo }) => {
 
             <div className="space-y-2 sm:space-y-3">
               {suggestedCreators.slice(0, 4).map((creator) => (
-                <div key={creator.id} className="flex items-center rounded-lg transition-colors hover:bg-slate-800 p-1.5 sm:p-2">
+                <div key={creator.id} className="flex items-center rounded-lg transition-colors hover:bg-surface-light p-1.5 sm:p-2">
                   <img
                     src={creator.avatar}
                     alt={creator.name}
@@ -331,20 +333,20 @@ const MainPage: React.FC<MainPageProps> = ({ navigateTo }) => {
       </div>
 
       {/* Mobile Bottom Nav */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-slate-900 border-t border-slate-700 px-2 py-2 flex justify-around z-40 safe-area-inset-bottom text-gray-200">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-surface border-t border-soft px-2 py-2 flex justify-around z-40 safe-area-inset-bottom text-gray-200">
         <a href="#" className="flex flex-col items-center text-primary px-1">
           <Home className="w-5 h-5" />
           <span className="text-[10px] mt-0.5">Home</span>
         </a>
-        <a onClick={() => navigateTo('search')} className="flex flex-col items-center text-gray-300 cursor-pointer px-1">
+        <a onClick={() => navigateTo('search')} className="flex flex-col items-center text-gray-300 hover:text-primary transition-colors cursor-pointer px-1">
           <Search className="w-5 h-5" />
           <span className="text-[10px] mt-0.5">Explore</span>
         </a>
-        <a href="#" className="flex flex-col items-center text-gray-300 px-1">
+        <a href="#" className="flex flex-col items-center text-gray-300 hover:text-primary transition-colors px-1">
           <Video className="w-5 h-5" />
           <span className="text-[10px] mt-0.5">Live</span>
         </a>
-        <a onClick={() => navigateTo('messages')} className="flex flex-col items-center text-gray-300 cursor-pointer px-1">
+        <a onClick={() => navigateTo('messages')} className="flex flex-col items-center text-gray-300 hover:text-primary transition-colors cursor-pointer px-1">
           <MessageSquare className="w-5 h-5" />
           <span className="text-[10px] mt-0.5">Messages</span>
         </a>

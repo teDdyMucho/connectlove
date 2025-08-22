@@ -361,10 +361,6 @@ const Feed: React.FC<FeedProps> = ({ navigateTo }) => {
               alt="Post content"
               className={`w-full h-auto max-h-[400px] object-cover ${locked ? 'blur-xl pointer-events-none select-none' : ''}`}
               loading="lazy"
-              style={{ 
-                borderRadius: '0px',
-                margin: '0 auto'
-              }}
             />
           </div>
         );
@@ -426,7 +422,7 @@ const Feed: React.FC<FeedProps> = ({ navigateTo }) => {
   return (
     <div className="space-y-4 sm:space-y-6">
       {posts.length === 0 && !loading ? (
-        <div className="bg-slate-900 text-gray-100 rounded-lg sm:rounded-xl p-6 text-center border border-slate-700 shadow-sm">
+        <div className="bg-surface text-gray-100 rounded-lg sm:rounded-xl p-6 text-center border border-slate-700 shadow-sm">
           <div className="text-gray-400 mb-3">
             <svg className="w-12 h-12 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
@@ -440,14 +436,14 @@ const Feed: React.FC<FeedProps> = ({ navigateTo }) => {
           <article
             key={post.id}
             ref={idx === posts.length - 1 ? lastPostElementRef : undefined}
-            className="group bg-slate-900 text-gray-100 rounded-lg sm:rounded-xl overflow-hidden border border-slate-700 shadow-sm card-hover animate-in-up"
+            className="group bg-surface text-gray-100 rounded-lg sm:rounded-xl overflow-hidden border border-soft shadow-sm card-hover animate-in-up"
             style={{ animationDelay: `${idx * 60}ms` }}
             aria-posinset={idx + 1}
             aria-setsize={posts.length}
             aria-roledescription="Post"
           >
             {/* Header - User Profile Section */}
-            <div className="p-3 sm:p-4 flex items-center">
+            <div className="p-3 sm:p-4">
               <div className="flex items-center">
                 <img
                   src={post.creator_avatar || 'https://via.placeholder.com/40'}
@@ -455,22 +451,22 @@ const Feed: React.FC<FeedProps> = ({ navigateTo }) => {
                   className="w-8 h-8 sm:w-10 sm:h-10 rounded-full object-cover mr-2 sm:mr-3 cursor-pointer"
                   onClick={() => handleCreatorClick(post.creator_name, post.creator_avatar)}
                 />
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <h3
-                      className="font-medium text-sm sm:text-base leading-tight cursor-pointer hover:underline text-gray-100"
-                      onClick={() => handleCreatorClick(post.creator_name, post.creator_avatar)}
-                      title={`View ${post.creator_name}'s profile`}
-                    >
-                      {post.creator_name || 'Unknown'}
-                    </h3>
-                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] sm:text-xs bg-primary/10 text-primary border border-primary/20">
-                      {post.category || post.creator_category || 'User'}
-                    </span>
+                <div className="flex-1">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3
+                        className="font-medium text-sm sm:text-base leading-tight cursor-pointer hover:underline text-gray-100"
+                        onClick={() => handleCreatorClick(post.creator_name, post.creator_avatar)}
+                        title={`View ${post.creator_name}'s profile`}
+                      >
+                        {post.creator_name || 'Unknown'}
+                      </h3>
+                      <p className="text-xs text-gray-400">
+                        {formatTimeAgo(post.created_at)}
+                      </p>
+                    </div>
+                    <span className="text-xs text-white px-2 py-0.5 rounded-md bg-primary/90">Public</span>
                   </div>
-                  <p className="text-xs text-gray-400">
-                    {formatTimeAgo(post.created_at)}
-                  </p>
                 </div>
               </div>
             </div>
@@ -482,9 +478,10 @@ const Feed: React.FC<FeedProps> = ({ navigateTo }) => {
               )}
             </div>
 
-            {/* Media Content with lock overlay when needed */}
+            {/* Media Content with lock overlay when needed */
+            }
             {post.media_urls && post.media_urls.length > 0 && (
-              <div className="relative w-full overflow-hidden rounded-xl ring-1 ring-slate-700 mx-3 sm:mx-4 mb-2 sm:mb-3">
+              <div className="relative w-full overflow-hidden rounded-xl border border-soft mx-3 sm:mx-4 mb-2 sm:mb-3">
                 {renderMedia(post.media_urls, post.is_locked)}
                 {post.is_locked && (
                   <div className="absolute inset-0 flex items-center justify-center bg-black/40">
@@ -504,7 +501,7 @@ const Feed: React.FC<FeedProps> = ({ navigateTo }) => {
             )}
 
             {/* Actions and Visibility */}
-            <div className="px-3 sm:px-4 py-2 sm:py-3 flex items-center justify-between border-t border-slate-700 bg-slate-900/80">
+            <div className="px-3 sm:px-4 pt-2 sm:pt-3 pb-3 flex items-center justify-between bg-surface">
               {/* Left side - interaction buttons */}
               <div className="flex items-center space-x-4">
                 <button className="flex items-center text-gray-300 hover:text-primary transition-colors" aria-label="Like">
@@ -520,15 +517,9 @@ const Feed: React.FC<FeedProps> = ({ navigateTo }) => {
                 </button>
               </div>
               
-              {/* Right side - visibility */}
+              {/* Right side - empty space for alignment */}
               <div className="flex items-center">
-                <span className="text-xs text-gray-300 px-2 py-1 bg-slate-800 rounded-md border border-slate-700">Public</span>
-                {post.is_locked && (
-                  <span className="ml-2 text-xs text-primary font-medium">Locked</span>
-                )}
-                {post.category && (
-                  <span className="ml-2 text-xs px-2 py-1 rounded-md bg-slate-800 text-gray-300 border border-slate-700">{post.category}</span>
-                )}
+                {/* Badge moved to header */}
               </div>
             </div>
           </article>

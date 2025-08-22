@@ -11,6 +11,7 @@
     --color-medium-accent: #ff3d6e; /* gentle pink accent */
     --color-background: #0d0f14; /* slightly lighter for eye comfort */
     --color-surface: #171a22; /* elevated surface */
+    --color-border-soft: #2b3342; /* subtle border to avoid harsh lines */
   }
 }
 
@@ -43,6 +44,13 @@
     background-color: var(--color-background);
   }
   
+  .bg-surface {
+    background-color: var(--color-surface);
+  }
+
+  /* Soft border utility */
+  .border-soft { border-color: var(--color-border-soft); }
+  
   .border-primary {
     border-color: var(--color-primary);
   }
@@ -73,6 +81,28 @@
   
   .hover\:text-primary-dark:hover {
     color: var(--color-primary-dark);
+  }
+  
+  .card-hover {
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+  }
+  .card-hover:hover {
+    transform: translateY(-2px);
+  }
+
+  /* Footer action button hover pill */
+  .action-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.25rem 0.5rem;
+    border-radius: 9999px;
+    color: #cbd5e1; /* slate-300 */
+    transition: background-color 0.2s ease, color 0.2s ease;
+  }
+  .action-btn:hover {
+    background-color: rgba(148, 163, 184, 0.12); /* slate-400 at ~12% */
+    color: var(--color-primary);
   }
 }
 
@@ -114,9 +144,61 @@ textarea:focus {
   transform: scale(1.05);
 }
 
+/* Primary button shimmer and subtle glow (shared from creator styles) */
+button.bg-primary {
+  position: relative;
+  overflow: hidden;
+}
+button.bg-primary::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+  transition: left 0.7s ease;
+}
+button.bg-primary:hover::before { left: 100%; }
+
+.bg-primary::after {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: radial-gradient(circle, rgba(255,255,255,0.2) 0%, rgba(255,255,255,0) 60%);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+.bg-primary:hover::after { opacity: 1; }
+
 /* Custom gradient */
 .gradient-primary {
   background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-medium-accent) 100%);
+}
+
+/* Tier badges (match screenshot) */
+.badge-bronze {
+  background-color: rgba(180, 83, 9, 0.12); /* amber-700 ~ #b45309 */
+  color: #f59e0b; /* amber-500 */
+  border-color: rgba(180, 83, 9, 0.55);
+}
+.badge-platinum {
+  background-color: rgba(147, 197, 253, 0.12); /* blue-300 ~ #93c5fd */
+  color: #93c5fd; /* blue-300 */
+  border-color: rgba(147, 197, 253, 0.55);
+}
+.badge-gold {
+  background-color: rgba(234, 179, 8, 0.12); /* amber-400 ~ #f59e0b tweaked */
+  color: #fbbf24; /* amber-300/400 mix */
+  border-color: rgba(234, 179, 8, 0.55);
+}
+.badge-silver {
+  background-color: rgba(229, 231, 235, 0.10); /* zinc-200 */
+  color: #e5e7eb; /* gray-200 */
+  border-color: rgba(203, 213, 225, 0.5); /* slate-300 */
 }
 
 /* Base dark theme text colors (non-breaking) */

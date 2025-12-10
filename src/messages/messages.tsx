@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { User, Send, Paperclip, Smile, MoreVertical } from 'lucide-react';
 // import { useAuth } from '../components/AuthContext';
 import { supabase } from '../lib/supabaseClient';
@@ -141,6 +141,7 @@ const Messages: React.FC<MessagesProps> = ({ navigateTo }) => {
     };
   }, );
 
+
   // Auto-scroll to bottom whenever messages change
   useEffect(() => {
     if (messagesEndRef.current) {
@@ -240,7 +241,7 @@ const Messages: React.FC<MessagesProps> = ({ navigateTo }) => {
     return { name: data?.full_name || data?.username || 'Unknown User' };
   };
 
-  const fetchLatestMessages = async (conversationId: string) => {
+  const fetchLatestMessages = useCallback(async (conversationId: string) => {
     try {
       const currentUserUuid = await resolveUserId(currentUserId);
       const { data, error } = await supabase
@@ -275,9 +276,9 @@ const Messages: React.FC<MessagesProps> = ({ navigateTo }) => {
     } catch (e) {
       console.error('fetchLatestMessages error:', e);
     }
-  };
+  }, [currentUserId]);
 
-  const ensureConversationWith = async (otherUserId: string) => {
+  const ensureConversationWith = useCallback(async (otherUserId: string) => {
     const currentUserUuid = await resolveUserId(currentUserId);
     if (!currentUserUuid) throw new Error('Current user not resolved');
     const { data: existing, error: findErr } = await supabase
@@ -304,9 +305,9 @@ const Messages: React.FC<MessagesProps> = ({ navigateTo }) => {
 
     if (insErr) throw insErr;
     return { conversationId: inserted.conversation_id, created: true };
-  };
+  }, [currentUserId]);
 
-  const handleSelectConversation = async (id: string, passedName?: string, passedOtherUserId?: string) => {
+  const handleSelectConversation = useCallback(async (id: string, passedName?: string, passedOtherUserId?: string) => {
     try {
       let conversationId: string | null = id || null;
       let otherUserId: string | null = passedOtherUserId || null;
@@ -358,7 +359,7 @@ const Messages: React.FC<MessagesProps> = ({ navigateTo }) => {
     } catch (err) {
       console.error('Error in handleSelectConversation:', err);
     }
-  };
+  }, [currentUserId, fetchLatestMessages]);
 
   const sendWebhookMessage = async (messageText: string) => {
     try {
@@ -464,65 +465,102 @@ const Messages: React.FC<MessagesProps> = ({ navigateTo }) => {
   // Image upload handler
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file) return;
-    // Reset the input so the same file can be selected again next time
-    e.target.value = '';
+    if (file) {
+      try {
+        const currentUserUuid = await resolveUserId(currentUserId);
+        if (!currentUserUuid) return;
 
-    try {
-      if (!activeConv || !activeConv.otherUserId) return;
-      const currentUserUuid = await resolveUserId(currentUserId);
-      if (!currentUserUuid) return;
-
-      // Ensure conversation exists before upload (so preview updates go to correct thread)
-      if (!activeConversationId) {
-        const ensured = await ensureConversationWith(activeConv.otherUserId);
-        if (ensured.conversationId !== activeConversationId) {
-          setActiveConversationId(ensured.conversationId);
+        // Ensure conversation exists before upload (so preview updates go to correct thread)
+        if (!activeConversationId && activeConv?.otherUserId) {
+          const ensured = await ensureConversationWith(activeConv.otherUserId);
+          if (ensured.conversationId !== activeConversationId) {
+            setActiveConversationId(ensured.conversationId);
+          }
         }
+
+        setUploadingImage(true);
+        const bucket = STORAGE_BUCKET;
+        const timestamp = Date.now();
+        const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+        const path = `${currentUserUuid}/${timestamp}_${safeName}`;
+
+        const { error: upErr } = await supabase.storage
+          .from(bucket)
+          .upload(path, file, { upsert: false, cacheControl: '3600', contentType: file.type });
+        if (upErr) throw upErr;
+
+        const { data: pub } = supabase.storage.from(bucket).getPublicUrl(path);
+        const publicUrl = pub.publicUrl;
+
+        // Optimistic UI with image
+        const nowStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        const tempImg: MessageUI = {
+          id: `temp-${Date.now()}`,
+          text: publicUrl,
+          time: nowStr,
+          sender: 'user',
+        };
+        setMessages((prev) => [...prev, tempImg]);
+        if (activeConv)
+          setActiveConv({ ...activeConv, lastMessage: 'You, Sent a photo', time: 'Just now' });
+
+        // Send webhook with the image URL as the message text so receiver gets it
+        await sendWebhookMessage(publicUrl);
+      } catch (err: unknown) {
+        console.error('[upload image] error', err);
+        const msg = err instanceof Error ? err.message : String(err);
+        if (msg.toLowerCase().includes('bucket') && msg.toLowerCase().includes('not found')) {
+          alert(
+            `Image upload bucket not found.\n\n` +
+            `Please create a public Supabase Storage bucket named "${STORAGE_BUCKET}" and try again.\n` +
+            `Supabase Dashboard -> Storage -> Create bucket -> Name: ${STORAGE_BUCKET} -> Public.`
+          );
+        }
+      } finally {
+        setUploadingImage(false);
       }
-
-      setUploadingImage(true);
-      const bucket = STORAGE_BUCKET;
-      const timestamp = Date.now();
-      const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
-      const path = `${currentUserUuid}/${timestamp}_${safeName}`;
-
-      const { error: upErr } = await supabase.storage
-        .from(bucket)
-        .upload(path, file, { upsert: false, cacheControl: '3600', contentType: file.type });
-      if (upErr) throw upErr;
-
-      const { data: pub } = supabase.storage.from(bucket).getPublicUrl(path);
-      const publicUrl = pub.publicUrl;
-
-      // Optimistic UI with image
-      const nowStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-      const tempImg: MessageUI = {
-        id: `temp-${Date.now()}`,
-        text: publicUrl,
-        time: nowStr,
-        sender: 'user',
-      };
-      setMessages((prev) => [...prev, tempImg]);
-      if (activeConv)
-        setActiveConv({ ...activeConv, lastMessage: 'You, Sent a photo', time: 'Just now' });
-
-      // Send webhook with the image URL as the message text so receiver gets it
-      await sendWebhookMessage(publicUrl);
-    } catch (err: unknown) {
-      console.error('[upload image] error', err);
-      const msg = err instanceof Error ? err.message : String(err);
-      if (msg.toLowerCase().includes('bucket') && msg.toLowerCase().includes('not found')) {
-        alert(
-          `Image upload bucket not found.\n\n` +
-          `Please create a public Supabase Storage bucket named "${STORAGE_BUCKET}" and try again.\n` +
-          `Supabase Dashboard -> Storage -> Create bucket -> Name: ${STORAGE_BUCKET} -> Public.`
-        );
-      }
-    } finally {
-      setUploadingImage(false);
     }
   };
+
+  // Auto-select creator conversation if coming from creator profile
+  useEffect(() => {
+    const checkAutoSelectCreator = async () => {
+      try {
+        const storedCreatorInfo = localStorage.getItem('autoSelectCreator');
+        if (storedCreatorInfo) {
+          console.log('Found stored creator info for auto-selection');
+          const creatorInfo = JSON.parse(storedCreatorInfo);
+          
+          // Clear the stored info so it only happens once
+          localStorage.removeItem('autoSelectCreator');
+          
+          // Wait a bit for MessageList to load
+          setTimeout(async () => {
+            if (creatorInfo.identifier) {
+              console.log('Auto-selecting conversation for creator:', creatorInfo.name);
+              
+              // Try to find existing conversation or create new one
+              const currentUserUuid = await resolveUserId(currentUserId);
+              const creatorUserId = await resolveUserId(creatorInfo.identifier);
+              
+              if (currentUserUuid && creatorUserId) {
+                // Check if conversation exists, if not create it
+                const result = await ensureConversationWith(creatorUserId);
+                if (result?.conversationId) {
+                  console.log('Auto-selecting conversation ID:', result.conversationId);
+                  await handleSelectConversation(result.conversationId, creatorInfo.name, creatorUserId);
+                }
+              }
+            }
+          }, 300); // Wait 300ms for everything to load - faster response
+        }
+      } catch (error) {
+        console.error('Error in auto-select creator:', error);
+      }
+    };
+
+    checkAutoSelectCreator();
+  }, [currentUserId, ensureConversationWith, handleSelectConversation]); // Include all dependencies
 
   return (
     <div className="messages-page min-h-screen bg-[#141825] scroll-smooth overflow-x-hidden">

@@ -694,6 +694,31 @@ const Creator: React.FC<CreatorProps> = ({ navigateTo }) => {
             )
           }
           
+          {/* Message Button */}
+          <button
+            onClick={async () => {
+              console.log('Message button clicked for creator:', selectedProfile);
+              
+              // Store creator info in localStorage for messages page to pick up
+              if (selectedProfile) {
+                const creatorInfo = {
+                  identifier: selectedProfile.username || selectedProfile.name,
+                  name: selectedProfile.name || selectedProfile.username,
+                  username: selectedProfile.username,
+                  avatar: selectedProfile.avatar
+                };
+                localStorage.setItem('autoSelectCreator', JSON.stringify(creatorInfo));
+                console.log('Stored creator info for auto-selection:', creatorInfo);
+              }
+              
+              navigateTo?.('messages');
+            }}
+            className="w-full bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 text-white font-bold rounded-full px-6 sm:px-8 py-3 sm:py-4 flex items-center justify-center transition-all hover:scale-105 mb-4 sm:mb-5 text-sm sm:text-base shadow-lg shadow-blue-500/25"
+          >
+            <MessageCircle className="h-4 w-4 sm:h-5 sm:w-5 mr-2 sm:mr-3" />
+            Send Message
+          </button>
+          
           <div className="flex justify-center space-x-6 sm:space-x-8 w-full pt-4 sm:pt-6 border-t border-pink-500/20">
             <button className="flex items-center text-gray-300 hover:text-pink-400 text-sm sm:text-base font-medium transition-all hover:scale-105">
               <Settings className="h-5 w-5 sm:h-6 sm:w-6 mr-2 sm:mr-3" />

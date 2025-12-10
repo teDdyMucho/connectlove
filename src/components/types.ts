@@ -1,5 +1,5 @@
 // Define types for authentication and navigation
-export type Page = 'landing' | 'signin' | 'signup' | 'main' | 'creator' | 'profile' | 'messages' | 'search' | '';
+export type Page = 'landing' | 'signin' | 'signup' | 'main' | 'creator' | 'profile' | 'messages' | 'search' | 'home' | 'feed' | 'wallet' | 'subscriptions' | 'orders' | 'tip' | 'stream' | 'memberships' | '';
 export type UserType = 'creator' | 'supporter';
 
 // Lightweight profile info shared across pages

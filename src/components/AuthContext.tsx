@@ -62,7 +62,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [selectedProfile]);
 
   // Auth methods
-  const login = () => setIsAuthenticated(true);
+  const login = () => {
+    // Set authenticated first, then navigate directly to main
+    // to avoid race conditions where navigateTo reads a stale
+    // isAuthenticated value during the same tick.
+    setIsAuthenticated(true);
+    setCurrentPage('main');
+  };
   const logout = () => {
     setIsAuthenticated(false);
     setCurrentPage('landing');

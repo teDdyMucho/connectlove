@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Heart, Settings, Lock, User, X, Search, Bell, MessageCircle, Share2 } from 'lucide-react';
+import { Heart, Settings, Lock, User, X, Search, Bell, MessageCircle, Share2, Eye } from 'lucide-react';
 import './creator.css';
 import ProfileDropdown from '../components/ProfileDropdown';
 import { useAuth } from '../components/AuthContext';
@@ -379,6 +379,11 @@ const Creator: React.FC<CreatorProps> = ({ navigateTo }) => {
   const closeDropdown = () => {
     setShowDropdown(false);
   };
+
+  // Navigate to Supporter View (main feed)
+  const handleSupporterView = () => {
+    if (navigateTo) navigateTo('main');
+  };
   
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -638,6 +643,16 @@ const Creator: React.FC<CreatorProps> = ({ navigateTo }) => {
                 <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
               </svg>
               <span>Privacy</span>
+            </button>
+          </div>
+          {/* Supporter View CTA at bottom */}
+          <div className="mt-3 sm:mt-4 w-full">
+            <button
+              onClick={handleSupporterView}
+              className="w-full py-2.5 px-4 rounded-lg bg-pink-500/10 hover:bg-pink-500/20 text-pink-500 flex items-center justify-center space-x-2 transition-colors"
+            >
+              <Eye className="w-5 h-5" />
+              <span>Supporter View</span>
             </button>
           </div>
         </div>

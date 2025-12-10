@@ -14,7 +14,7 @@ const SignInPage: React.FC<SignInPageProps> = ({ navigateTo }) => {
   const [formErrors, setFormErrors] = useState<SignInFormErrors>({});
   const [showPopup, setShowPopup] = useState(false);
   const [popupMessage, setPopupMessage] = useState('');
-  const { handleSubmit } = useSignInForm();
+  const { handleSubmit } = useSignInForm(); 
 
   const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
     if (isSubmitting) return; // guard against double submit
@@ -43,8 +43,7 @@ const SignInPage: React.FC<SignInPageProps> = ({ navigateTo }) => {
   
   const handlePopupClose = () => {
     setShowPopup(false);
-    login(); // Set authentication state to true
-    navigateTo('main'); // Navigate to main page after successful sign-in
+    login(); // AuthContext.login now also navigates to 'main'
   };
 
   return (

@@ -2,6 +2,8 @@ import React, { FormEvent, useState } from 'react';
 import { Settings } from 'lucide-react';
 import { UserType, useSignUpForm, SignUpFormErrors } from './SignUpFormHandler';
 import Popup from './Popup';
+import { supabase } from '../lib/supabaseClient';
+import { useAuth } from './AuthContext';
 
 interface SignUpFormProps {
   userType: UserType;
@@ -12,7 +14,9 @@ const SignUpForm: React.FC<SignUpFormProps> = ({ userType, navigateTo }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formErrors, setFormErrors] = useState<SignUpFormErrors>({});
   const [showPopup, setShowPopup] = useState(false);
+  const [upgradeCompleted, setUpgradeCompleted] = useState(false);
   const { handleSubmit } = useSignUpForm();
+  const { navigateTo: ctxNavigate } = useAuth();
 
   const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
     setIsSubmitting(true);
@@ -22,6 +26,19 @@ const SignUpForm: React.FC<SignUpFormProps> = ({ userType, navigateTo }) => {
       const result = await handleSubmit(event, userType);
       
       if (result.success) {
+        // Attempt in-app upgrade if user is already authenticated and chose creator flow
+        if (userType === 'creator') {
+          try {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (user?.id) {
+              const { error } = await supabase
+                .from('users')
+                .update({ user_type: 'creator' })
+                .eq('id', user.id);
+              if (!error) setUpgradeCompleted(true);
+            }
+          } catch { /* ignore */ }
+        }
         // Show popup on successful submission
         setShowPopup(true);
       } else if (result.errors) {
@@ -35,6 +52,11 @@ const SignUpForm: React.FC<SignUpFormProps> = ({ userType, navigateTo }) => {
   
   const handlePopupClose = () => {
     setShowPopup(false);
+    // If this was an upgrade flow and we managed to update user_type, go to Creator dashboard
+    if (upgradeCompleted && userType === 'creator') {
+      ctxNavigate('creator');
+      return;
+    }
     navigateTo('signin');
   };
 
@@ -52,7 +74,7 @@ const SignUpForm: React.FC<SignUpFormProps> = ({ userType, navigateTo }) => {
         </h2>
         <p className="text-gray-600">
           {userType === 'creator' 
-            ? 'Share your creativity and connect with supporters who appreciate your work'
+            ? 'Share your creativity and connect with supporters. Complete verification to unlock Creator features.'
             : 'Discover amazing creators and support their incredible journey'
           }
         </p>
@@ -152,6 +174,41 @@ const SignUpForm: React.FC<SignUpFormProps> = ({ userType, navigateTo }) => {
           )}
         </div>
 
+        {userType === 'creator' && (
+          <>
+            <div>
+              <label htmlFor="selfieImage" className="block text-sm font-medium text-gray-700 mb-2">Selfie Photo (required)</label>
+              <input
+                id="selfieImage"
+                name="selfieImage"
+                type="file"
+                accept="image/*"
+                className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary focus:border-primary transition-colors ${formErrors.selfieImage ? 'border-red-500' : 'border-gray-300'}`}
+                required
+              />
+              {formErrors.selfieImage && (
+                <p className="mt-1 text-sm text-red-600">{formErrors.selfieImage}</p>
+              )}
+              <p className="text-xs text-gray-500 mt-1">A clear photo of your face for identity verification.</p>
+            </div>
+            <div>
+              <label htmlFor="idImage" className="block text-sm font-medium text-gray-700 mb-2">Government ID (required)</label>
+              <input
+                id="idImage"
+                name="idImage"
+                type="file"
+                accept="image/*"
+                className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary focus:border-primary transition-colors ${formErrors.idImage ? 'border-red-500' : 'border-gray-300'}`}
+                required
+              />
+              {formErrors.idImage && (
+                <p className="mt-1 text-sm text-red-600">{formErrors.idImage}</p>
+              )}
+              <p className="text-xs text-gray-500 mt-1">Upload a photo of your valid ID card (hide sensitive numbers if you prefer). Admins will review.</p>
+            </div>
+          </>
+        )}
+
         <button 
           type="submit"
           disabled={isSubmitting}
@@ -168,7 +225,7 @@ const SignUpForm: React.FC<SignUpFormProps> = ({ userType, navigateTo }) => {
           ) : (
             <>
               <Settings className="h-5 w-5 mr-2" />
-              Create {userType === 'creator' ? 'Creator' : 'Supporter'} Account
+              {userType === 'creator' ? 'Submit Creator Verification' : 'Create Supporter Account'}
             </>
           )}
         </button>

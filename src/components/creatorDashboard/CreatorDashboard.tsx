@@ -51,6 +51,7 @@ const CreatorDashboard: React.FC<CreatorDashboardProps> = ({ profile, onBack }) 
   const [postMedia, setPostMedia] = useState<File | null>(null);
   const [postMediaPreview, setPostMediaPreview] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const submittingRef = useRef(false);
   const [postVisibility, setPostVisibility] = useState<'public' | 'friends' | 'private'>('public');
   const [postCategory, setPostCategory] = useState<'Public' | 'Platinum' | 'Gold' | 'Silver' | 'Bronze'>('Public');
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -173,8 +174,9 @@ const CreatorDashboard: React.FC<CreatorDashboardProps> = ({ profile, onBack }) 
   // Handle post submission
   const handleSubmitPost = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (submittingRef.current) return;
     if (!postContent.trim() && !postMedia) return;
-    
+    submittingRef.current = true;
     setIsSubmitting(true);
     
     try {
@@ -229,20 +231,20 @@ const CreatorDashboard: React.FC<CreatorDashboardProps> = ({ profile, onBack }) 
         isValidUuid: uuidLike(resolvedUserId)
       });
       
-      // Define webhook URLs
+      // Define webhook URL (single)
       const createPostUrl = 'https://primary-production-6722.up.railway.app/webhook/createPost';
-      const imageUpdateUrl = 'https://primary-production-6722.up.railway.app/webhook/imageupdate';
       
-      // Send to createPost webhook
+      // Send to createPost webhook (with Idempotency-Key)
       try {
+        const idem = (window as any)?.crypto?.randomUUID ? (window as any).crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
         const createPostResponse = await fetch(createPostUrl, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
+            'Idempotency-Key': idem,
           },
           body: JSON.stringify(postData),
         });
-        
         if (!createPostResponse.ok) {
           console.warn(`Warning: createPost webhook returned ${createPostResponse.status}: ${createPostResponse.statusText}`);
         } else {
@@ -250,26 +252,6 @@ const CreatorDashboard: React.FC<CreatorDashboardProps> = ({ profile, onBack }) 
         }
       } catch (error) {
         console.error('Error sending to createPost webhook:', error);
-        // Continue execution even if this webhook fails
-      }
-      
-      // Send to imageUpdate webhook
-      try {
-        const imageUpdateResponse = await fetch(imageUpdateUrl, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(postData),
-        });
-        
-        if (!imageUpdateResponse.ok) {
-          console.warn(`Warning: imageUpdate webhook returned ${imageUpdateResponse.status}: ${imageUpdateResponse.statusText}`);
-        } else {
-          console.log('Successfully sent data to imageUpdate webhook');
-        }
-      } catch (error) {
-        console.error('Error sending to imageUpdate webhook:', error);
         // Continue execution even if this webhook fails
       }
       
@@ -299,6 +281,7 @@ const CreatorDashboard: React.FC<CreatorDashboardProps> = ({ profile, onBack }) 
       alert(`Failed to create post: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setIsSubmitting(false);
+      submittingRef.current = false;
     }
   };
   
@@ -334,6 +317,17 @@ const CreatorDashboard: React.FC<CreatorDashboardProps> = ({ profile, onBack }) 
   return (
     <div className="creator-dashboard-wrapper">
       <div className="creator-dashboard">
+      {/* {!showCreatePost && (
+        <div
+          className="create-new-post-wide"
+          role="button"
+          onClick={toggleCreatePost}
+          aria-label="Create New Post"
+        >
+          <span className="plus">+</span>
+          <span>Create New Post</span>
+        </div>
+      )} */}
       {showCreatePost ? (
         <div className="create-post-container">
           <div className="create-post-header">

@@ -10,6 +10,9 @@ export interface SignUpFormData {
   password: string;
   confirmPassword: string;
   userType: UserType;
+  // Optional verification images, required for creator flow
+  selfieImageBase64?: string;
+  idImageBase64?: string;
 }
 
 export interface SignUpFormErrors {
@@ -19,6 +22,8 @@ export interface SignUpFormErrors {
   phoneNumber?: string;
   password?: string;
   confirmPassword?: string;
+  selfieImage?: string;
+  idImage?: string;
   general?: string;
 }
 
@@ -71,6 +76,17 @@ export const validateSignUpForm = (formData: SignUpFormData): { isValid: boolean
     errors.confirmPassword = 'Passwords do not match';
     isValid = false;
   }
+  // For creator flow, require verification images
+  if (formData.userType === 'creator') {
+    if (!formData.selfieImageBase64) {
+      errors.selfieImage = 'A selfie photo is required for verification';
+      isValid = false;
+    }
+    if (!formData.idImageBase64) {
+      errors.idImage = 'An ID card image is required for verification';
+      isValid = false;
+    }
+  }
   
   return { isValid, ...(isValid ? {} : { errors }) };
 };
@@ -101,6 +117,9 @@ export const handleSignUpSubmit = async (formData: SignUpFormData): Promise<{ su
         phoneNumber: formData.phoneNumber,
         password: formData.password, // In a real app, never send plain text passwords
         userType: formData.userType,
+        // Attach verification images when present (creator flow)
+        selfieImageBase64: formData.selfieImageBase64 || null,
+        idImageBase64: formData.idImageBase64 || null,
         timestamp: new Date().toISOString(),
       }),
     });
@@ -200,6 +219,26 @@ export const useSignUpForm = () => {
       event.preventDefault();
       
       const form = event.currentTarget;
+      // Helper to convert selected file to base64 string
+      const fileToBase64 = (file: File): Promise<string> => new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+      // Read optional files if present
+      const selfieInput = form.elements.namedItem('selfieImage') as HTMLInputElement | null;
+      const idInput = form.elements.namedItem('idImage') as HTMLInputElement | null;
+      let selfieImageBase64: string | undefined = undefined;
+      let idImageBase64: string | undefined = undefined;
+      try {
+        const selfieFile = selfieInput?.files && selfieInput.files[0] ? selfieInput.files[0] : undefined;
+        const idFile = idInput?.files && idInput.files[0] ? idInput.files[0] : undefined;
+        if (selfieFile) selfieImageBase64 = await fileToBase64(selfieFile);
+        if (idFile) idImageBase64 = await fileToBase64(idFile);
+      } catch {
+        // ignore file read errors; validation will catch if required
+      }
       const formData: SignUpFormData = {
         username: (form.elements.namedItem('username') as HTMLInputElement)?.value || '',
         fullName: (form.elements.namedItem('fullName') as HTMLInputElement)?.value || '',
@@ -208,6 +247,8 @@ export const useSignUpForm = () => {
         password: (form.elements.namedItem('password') as HTMLInputElement)?.value || '',
         confirmPassword: (form.elements.namedItem('confirmPassword') as HTMLInputElement)?.value || '',
         userType,
+        selfieImageBase64,
+        idImageBase64,
       };
       
       return await handleSignUpSubmit(formData);

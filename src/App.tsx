@@ -17,8 +17,7 @@ function AppContent() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
           <div className="flex items-center cursor-pointer" onClick={() => navigateTo('landing')}>
-            <Heart className="h-8 w-8 text-primary mr-2" />
-            <span className="text-xl font-bold text-gray-900">ConnectLove</span>
+            <img src="/images/Clove_logo2.png" alt="ConnectLove Logo" className="h-15 w-40" />
           </div>
           <nav className="hidden md:flex space-x-8">
             <a href="#" className="text-gray-600 hover:text-primary transition-colors">Features</a>
@@ -43,7 +42,7 @@ function AppContent() {
       {/* Hero Section */}
       <section className="py-20 bg-gradient-to-br from-background to-light-accent">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <h1 className="text-5xl md:text-6xl font-bold text-gray-900 mb-6">
+        <h1 className="text-5xl md:text-6xl font-bold text-gray-900 mb-6" style={{ fontFamily: '"COM4t Drify", sans-serif' }}>
             Connect <span className="text-primary">Creators</span> and{' '}
             <span className="text-primary">Supporters</span>
           </h1>
@@ -176,8 +175,7 @@ function AppContent() {
       <footer className="bg-gray-900 text-white py-12">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-center mb-8">
-            <Heart className="h-8 w-8 text-primary mr-2" />
-            <span className="text-xl font-bold">ConnectLove</span>
+            <img src="/images/Clove_logo2.png" alt="ConnectLove Logo" className="h-15 w-40" />
           </div>
           <div className="flex justify-center space-x-8 mb-8">
             <a href="#" className="text-gray-400 hover:text-white transition-colors">Privacy Policy</a>
@@ -203,8 +201,7 @@ function AppContent() {
           </button>
           
           <div className="flex items-center justify-center mb-8">
-            <Heart className="h-8 w-8 text-primary mr-2" />
-            <span className="text-2xl font-bold text-primary">ConnectLove</span>
+            <img src="/images/Clove_logo2.png" alt="ConnectLove Logo" className="h-40 w-60" />
           </div>
           
           {/* User Type Toggle */}

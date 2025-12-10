@@ -1,0 +1,28 @@
+{
+    "name": "ConnectLove",
+    "short_name": "ConnectLove",
+    "description": "ConnectLove - Build meaningful connections through shared passions and mutual support",
+    "start_url": "/",
+    "display": "standalone",
+    "orientation": "portrait",
+    "background_color": "#000a1e",
+    "theme_color": "#000a1e",
+    "categories": ["dating", "social"],
+    "lang": "en-US",
+    "dir": "ltr",
+    "prefer_related_applications": false,
+    "icons": [
+      {
+        "src": "/images/browser_logo.png",
+        "sizes": "192x192",
+        "type": "image/png",
+        "purpose": "any maskable"
+      },
+      {
+        "src": "/images/browser_logo.png",
+        "sizes": "512x512",
+        "type": "image/png",
+        "purpose": "any maskable"
+      }
+    ]
+  }

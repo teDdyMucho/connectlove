@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Heart, MessageSquare, Share2, Lock } from 'lucide-react';
+import { Heart, MessageSquare, Share2, Lock, Users, Globe, User as UserIcon } from 'lucide-react';
 import { supabase } from '../lib/supabaseClient';
 import { formatDistanceToNow } from 'date-fns';
 import { useAuth } from './AuthContext';
@@ -7,45 +7,47 @@ import { useAuth } from './AuthContext';
 type Tier = 'Public' | 'Bronze' | 'Silver' | 'Gold' | 'Platinum';
 
 type RawRpcRow = {
-  id?: string;
-  title?: string | null;
-  content?: string | null;
-  media_urls?: string[] | null;
-  created_at?: string | null;
-  creator_name?: string | null;
-  author_name?: string | null;
-  full_name?: string | null;
-  username?: string | null;
-  creator_avatar?: string | null;
-  avatar_url?: string | null;
-  creator_category?: string | null;
-  category?: string | null;
-  visibility?: string | null;
-  likes_count?: number | null;
-  comments_count?: number | null;
-  is_locked?: boolean | null;
-  user_id?: string | null; // post owner
-  creator_id?: string | null;
-  author_id?: string | null;
-  owner_id?: string | null;
+  id: string;
+  user_id: string;
+  name: string;
+  title: string;
+  content: string;
+  category: string;
+  visibility: string;
+  created_at: string;
+  media_urls: string[];
+  creator_name: string;
+  creator_avatar: string;
+  creator_category: string;
+  likes_count: number;
+  comments_count: number;
+  is_locked: boolean;
+};
+
+// Visibility icon beside timestamp
+const VisibilityIcon: React.FC<{ visibility?: string | null }> = ({ visibility }) => {
+  const v = (visibility || 'public').toLowerCase();
+  const cls = 'inline-block align-middle ml-2 text-gray-300';
+  if (v === 'private' || v === 'only me') return <UserIcon className={`h-3.5 w-3.5 ${cls}`} />;
+  if (v === 'friends' || v === 'supporters' || v === 'friend') return <Users className={`h-3.5 w-3.5 ${cls}`} />;
+  return <Globe className={`h-3.5 w-3.5 ${cls}`} />;
 };
 
 interface FeedPost {
   id: string;
+  userId: string;
   title: string;
   content: string;
-  media_urls: string[] | null;
-  created_at: string;
-  creator_name: string;
-  creator_avatar: string;
-  creator_category?: string;
-  category?: Tier;
-  visibility?: 'public' | 'friends' | 'private' | string;
-  likes_count: number;
-  comments_count: number;
-  is_locked: boolean;
-  creator_id?: string;
-  user_id?: string; // owner id
+  category: Tier;
+  visibility: string;
+  createdAt: string;
+  media: string[];
+  authorName: string;
+  authorAvatar: string;
+  authorCategory: string;
+  likesCount: number;
+  commentsCount: number;
+  isLocked: boolean;
 }
 
 interface FeedProps {
@@ -55,16 +57,9 @@ interface FeedProps {
 
 const LIMIT = 10;
 
-// Tier precedence helper
-const tierPrecedence: Record<Tier, number> = {
-  Public: 0,
-  Bronze: 1,
-  Silver: 2,
-  Gold: 3,
-  Platinum: 4,
-};
-
-// Map tier strings to Tier type safely
+// -----------------------------------------------------------------------------
+// Tier helpers
+// -----------------------------------------------------------------------------
 const normalizeTier = (v?: string | null): Tier => {
   if (!v) return 'Public';
   const t = String(v).trim();
@@ -75,13 +70,64 @@ const normalizeTier = (v?: string | null): Tier => {
 const badgeClassForTier = (tier?: string | null) => {
   const t = normalizeTier(tier);
   switch (t) {
-    case 'Bronze': return 'bg-amber-700 text-white';
-    case 'Silver': return 'bg-slate-400 text-black';
-    case 'Gold': return 'bg-yellow-500 text-black';
-    case 'Platinum': return 'bg-blue-600 text-white';
-    default: return 'bg-green-600 text-white'; // Public
+    case 'Bronze':
+      return 'bg-gradient-to-r from-amber-600 to-amber-700 text-white shadow-lg shadow-amber-500/20';
+    case 'Silver':
+      return 'bg-gradient-to-r from-slate-400 to-slate-500 text-white shadow-lg shadow-slate-400/20';
+    case 'Gold':
+      return 'bg-gradient-to-r from-yellow-400 to-yellow-500 text-black shadow-lg shadow-yellow-400/20';
+    case 'Platinum':
+      return 'bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-lg shadow-blue-500/20';
+    default:
+      return 'bg-gradient-to-r from-green-500 to-emerald-600 text-white shadow-lg shadow-green-500/20'; // Public
   }
 };
+
+// -----------------------------------------------------------------------------
+// Viewer resolution – SINGLE source of truth (custom login via localStorage)
+// -----------------------------------------------------------------------------
+
+const resolveViewerIdFromStorage = (): string | null => {
+  if (typeof window === 'undefined') return null;
+
+  try {
+    const ls = window.localStorage;
+
+    const candidates = [
+      ls.getItem('current_user_id'),
+      ls.getItem('public_id'),
+      ls.getItem('user_id'),
+      ls.getItem('viewing_user_id'),
+    ];
+
+    for (const raw of candidates) {
+      const v = raw?.trim();
+      if (v && v !== 'null' && v !== 'undefined') {
+        return v;
+      }
+    }
+
+    // Fallback: stored profile object
+    const rawProfile = ls.getItem('user_profile');
+    if (rawProfile) {
+      try {
+        const parsed = JSON.parse(rawProfile) as { id?: string; user_id?: string };
+        if (parsed?.id) return String(parsed.id);
+        if (parsed?.user_id) return String(parsed.user_id);
+      } catch {
+        /* ignore */
+      }
+    }
+  } catch {
+    // ignore
+  }
+
+  return null;
+};
+
+// -----------------------------------------------------------------------------
+// Component
+// -----------------------------------------------------------------------------
 
 const Feed: React.FC<FeedProps> = ({ navigateTo, refreshSignal }) => {
   const [posts, setPosts] = useState<FeedPost[]>([]);
@@ -93,269 +139,131 @@ const Feed: React.FC<FeedProps> = ({ navigateTo, refreshSignal }) => {
   const seenIdsRef = useRef<Set<string>>(new Set());
   const fetchingRef = useRef<boolean>(false);
   const observer = useRef<IntersectionObserver | null>(null);
+  const viewerIdRef = useRef<string | null>(null);
+
   const { setSelectedProfile } = useAuth();
 
-  // IntersectionObserver for infinite scroll
-  const lastPostElementRef = useCallback((node: HTMLElement | null) => {
-    if (fetchingRef.current) return;
-    if (observer.current) observer.current.disconnect();
-    observer.current = new IntersectionObserver(entries => {
-      if (entries[0].isIntersecting && hasMore) {
-        setOffset(prev => prev + LIMIT);
-      }
-    }, { rootMargin: '200px' });
-    if (node) observer.current.observe(node);
-  }, [hasMore]);
+  // Resolve viewer once on mount
+  useEffect(() => {
+    const id = resolveViewerIdFromStorage();
+    viewerIdRef.current = id;
+    console.log('[FEED] viewer resolved from localStorage:', id);
+  }, []);
 
-  // Normalize rows coming from RPC / fallback queries into FeedPost
+  // IntersectionObserver for infinite scroll
+  const lastPostElementRef = useCallback(
+    (node: HTMLElement | null) => {
+      if (fetchingRef.current) return;
+      if (observer.current) observer.current.disconnect();
+      observer.current = new IntersectionObserver(
+        (entries) => {
+          if (entries[0].isIntersecting && hasMore) {
+            setOffset((prev) => prev + LIMIT);
+          }
+        },
+        { rootMargin: '200px' },
+      );
+      if (node) observer.current.observe(node);
+    },
+    [hasMore],
+  );
+
+  // Normalize rows coming from RPC into FeedPost
   const normalizeRow = (r: RawRpcRow): FeedPost => {
-    const id = String(r.id ?? '');
-    const created_at = r.created_at ?? new Date().toISOString();
-    const creator_name = r.creator_name || r.author_name || r.full_name || r.username || (r as any).name || 'Unknown';
-    const creator_avatar = r.creator_avatar || r.avatar_url || '';
-    const category = r.category ? normalizeTier(r.category) : (r.creator_category ? normalizeTier(r.creator_category) : 'Public');
-    const visibility = (r.visibility as any) || 'public';
+    const id = String(r?.id ?? '');
+    const createdAt = r?.created_at ?? new Date().toISOString();
+    const authorName = r?.creator_name || r?.name || 'Unknown';
+    const authorAvatar = r?.creator_avatar || '';
+    const category = normalizeTier(r?.category ?? 'Public');
+    const visibility = r?.visibility ?? 'public';
+    const media = Array.isArray(r?.media_urls) ? r.media_urls : [];
+
     return {
       id,
-      title: String(r.title ?? ''),
-      content: String(r.content ?? ''),
-      media_urls: Array.isArray(r.media_urls) ? r.media_urls : null,
-      created_at,
-      creator_name,
-      creator_avatar,
-      creator_category: r.creator_category ?? undefined,
+      userId: String(r?.user_id ?? ''),
+      title: String(r?.title ?? ''),
+      content: String(r?.content ?? ''),
       category,
       visibility,
-      likes_count: Number(r.likes_count ?? 0),
-      comments_count: Number(r.comments_count ?? 0),
-      is_locked: Boolean(r.is_locked ?? false), // may be corrected later
-      creator_id: r.creator_id || r.user_id || r.author_id || r.owner_id || undefined,
-      user_id: r.user_id || undefined,
+      createdAt,
+      media,
+      authorName,
+      authorAvatar,
+      authorCategory: r?.creator_category ?? 'User',
+      likesCount: Number(r?.likes_count ?? 0),
+      commentsCount: Number(r?.comments_count ?? 0),
+      isLocked: Boolean(r?.is_locked ?? false),
     };
   };
 
-  // Compute locking when we don't have is_locked from RPC
+  // Trust RPC is_locked; only enforce owner-unlock on the client as a safeguard
   const computeLockMap = useCallback(async (rows: FeedPost[], viewerId: string | null) => {
-    // If all posts already have is_locked provided, return as-is
-    const needsCompute = rows.some(r => r.is_locked === undefined || r.is_locked === null);
-    if (!needsCompute && viewerId) return rows;
-
-    // Build set of unique creator ids and their required category
-    const creators: Record<string, Tier> = {};
-    for (const p of rows) {
-      const cid = p.creator_id;
-      if (!cid) continue;
-      // store highest required tier if multiple posts differ
-      const current = creators[cid];
-      const needed = p.category ?? 'Public';
-      if (!current || tierPrecedence[needed] > tierPrecedence[current]) creators[cid] = needed;
-    }
-
-    // If no viewerId or no creators, compute simple rules
-    if (!viewerId || Object.keys(creators).length === 0) {
-      return rows.map(p => {
-        // owner never locked (if viewerId not provided we can't check ownership)
-        if (!viewerId) {
-          // conservatively: Public -> unlocked, others locked
-          return { ...p, is_locked: Boolean(p.category && p.category !== 'Public') };
-        }
-        return { ...p, is_locked: Boolean(p.category && p.category !== 'Public') };
-      });
-    }
-
-    // Fetch supports for this viewer against creators in batch
-    const creatorIds = Object.keys(creators);
-    try {
-      const { data: supportsData, error: supportsError } = await supabase
-        .from('supports')
-        .select('creator_id, supporter_id, tier')
-        .eq('supporter_id', viewerId)
-        .in('creator_id', creatorIds);
-
-      if (supportsError) {
-        console.warn('[feed] supports fetch error:', supportsError);
-      }
-
-      const supportMap = new Map<string, string>();
-      if (Array.isArray(supportsData)) {
-        for (const s of supportsData as any[]) {
-          if (s.creator_id && s.tier) supportMap.set(s.creator_id, s.tier);
-        }
-      }
-
-      // Now compute each post's locked state deterministically
-      const computed = rows.map(p => {
-        // owner always unlocked
-        if (p.creator_id && p.creator_id === viewerId) return { ...p, is_locked: false };
-
-        // Public is unlocked
-        if (!p.category || p.category === 'Public') return { ...p, is_locked: false };
-
-        // If viewer supports creator, check tier precedence
-        const required = p.category ?? 'Public';
-        const supportedTier = p.creator_id ? supportMap.get(p.creator_id) : undefined;
-        if (supportedTier) {
-          const supT = normalizeTier(supportedTier);
-          const ok = tierPrecedence[supT] >= tierPrecedence[required];
-          return { ...p, is_locked: !ok };
-        }
-
-        // Otherwise locked
-        return { ...p, is_locked: true };
-      });
-
-      return computed;
-    } catch (e) {
-      console.warn('[feed] failed to compute locks, defaulting conservatively', e);
-      return rows.map(p => ({ ...p, is_locked: Boolean(p.category && p.category !== 'Public') }));
-    }
+    if (!rows.length) return rows;
+    return rows.map((p) =>
+      viewerId && p.userId && p.userId === viewerId ? { ...p, isLocked: false } : p,
+    );
   }, []);
 
   const fetchPosts = useCallback(async () => {
     if (fetchingRef.current) return;
     fetchingRef.current = true;
     setError(null);
+
     try {
       setLoading(true);
 
-      // Get viewer id from supabase auth
-      const { data: { user } } = await supabase.auth.getUser();
-      const viewerId = user?.id ?? null;
+      // Always resolve viewer from localStorage (custom auth)
+      const viewerId = resolveViewerIdFromStorage();
+      viewerIdRef.current = viewerId || null;
+      console.log('[FEED] Viewer ID:', viewerId);
 
-      // Try primary RPC (try get_feed_posts then fetch_feed_posts if needed)
-      let rpcRows: RawRpcRow[] = [];
-      const rpcCandidates = ['get_feed_posts', 'fetch_feed_posts'];
-
-      for (const rpcName of rpcCandidates) {
-        try {
-          const rpcRes = await supabase.rpc(rpcName, {
-            viewer_id: viewerId,
-            limit_count: LIMIT,
-            offset_count: offset,
-          });
-          // rpcRes may have shape { data, error }
-          if (!rpcRes.error && Array.isArray(rpcRes.data) && rpcRes.data.length > 0) {
-            rpcRows = rpcRes.data as RawRpcRow[];
-            break;
-          }
-        } catch (e) {
-          // try next
-          console.warn(`[feed] rpc ${rpcName} failed, trying fallback`, e);
-        }
-      }
-
-      // If RPC returned nothing, fallback to more complete posts query
+      // RPC call
       let rows: RawRpcRow[] = [];
-      if (rpcRows.length > 0) {
-        rows = rpcRows;
-      } else {
-        // attempt to fetch more fields from posts + post_with_media + users where possible
-        const { data: postsData, error: postsError } = await supabase
-          .from('posts')
-          .select(`
-            id,
-            user_id,
-            title,
-            content,
-            category,
-            visibility,
-            created_at,
-            -- post_with_media may be a view, attempt safe join-like select if available (supabase allows selecting related)
-            post_with_media ( media_urls ),
-            users ( id, full_name, username, avatar_url, user_type )
-          `)
-          .order('created_at', { ascending: false })
-          .range(offset, offset + LIMIT - 1);
+      try {
+        const rpcRes = await supabase.rpc('fetch_feed_posts', {
+          viewer_id: viewerId,
+          limit_count: LIMIT,
+          offset_count: offset,
+        });
 
-        if (postsError) {
-          console.error('[feed] posts fallback error:', postsError);
-          setError(postsError.message || 'Failed to fetch posts');
-          setLoading(false);
-          fetchingRef.current = false;
-          return;
+        if (rpcRes.error) {
+          console.log('[FEED] RPC fetch_feed_posts error:', rpcRes.error);
         }
 
-        // Normalize joined shape to RawRpcRow
-        rows = (Array.isArray(postsData) ? postsData : []).map((p: any) => {
-          return {
-            id: p.id,
-            title: p.title,
-            content: p.content,
-            category: p.category,
-            visibility: p.visibility,
-            created_at: p.created_at,
-            media_urls: p.post_with_media?.media_urls ?? null,
-            creator_name: (p.users && (p.users.full_name || p.users.username)) || '',
-            creator_avatar: p.users?.avatar_url ?? '',
-            creator_category: p.users?.user_type ?? null,
-            user_id: p.user_id,
-          } as RawRpcRow;
-        });
+        rows = Array.isArray(rpcRes.data) ? (rpcRes.data as RawRpcRow[]) : [];
+        console.log('[FEED] RPC rows:', rows?.length ?? 0);
+      } catch (e) {
+        console.log('[FEED] RPC fetch_feed_posts exception:', e);
+        rows = [];
       }
 
-      // If nothing returned: signal end of feed
+      // End-of-feed handling
       if (!rows || rows.length === 0) {
         setHasMore(false);
         return;
       }
 
-      // Normalize
+      // Normalize + compute lock state
       const normalized = rows.map(normalizeRow);
+      console.log('[FEED] normalized len:', normalized.length, normalized[0]);
+      const computed = await computeLockMap(normalized, viewerId || null);
+      console.log('[FEED] computed len:', computed.length, computed[0]);
 
-      // Resolve missing creator fields by batch user fetch
-      const needResolve = normalized.filter(p => (!p.creator_name || !p.creator_avatar || !p.creator_category) && p.creator_id);
-      const idsToResolve = Array.from(new Set(needResolve.map(x => x.creator_id!).filter(Boolean)));
-      if (idsToResolve.length > 0) {
-        try {
-          const { data: usersData } = await supabase
-            .from('users')
-            .select('id, full_name, username, avatar_url, user_type')
-            .in('id', idsToResolve);
-          const users = Array.isArray(usersData) ? usersData : [];
-          const uMap = new Map<string, any>();
-          users.forEach(u => { if (u.id) uMap.set(u.id, u); });
-          for (const p of normalized) {
-            if (p.creator_id && uMap.has(p.creator_id)) {
-              const u = uMap.get(p.creator_id);
-              if (!p.creator_name) p.creator_name = u.full_name || u.username || p.creator_name;
-              if (!p.creator_avatar) p.creator_avatar = u.avatar_url || p.creator_avatar;
-              if (!p.creator_category) p.creator_category = u.user_type || p.creator_category;
-            }
-          }
-        } catch (e) {
-          console.warn('[feed] failed to resolve users batch', e);
-        }
-      }
-
-      // If RPC didn't provide is_locked, compute it using supports table
-      const computed = await computeLockMap(normalized, viewerId);
-
-      // Dedupe + merge into state
-      setPosts(prev => {
-        const merged: FeedPost[] = [];
-        const localSeen = new Set<string>(seenIdsRef.current);
-        // keep existing prev in order
-        for (const p of prev) {
-          if (!localSeen.has(p.id)) {
-            localSeen.add(p.id);
-            merged.push(p);
-          }
-        }
-        // append new unique posts in order
-        for (const p of computed) {
-          if (!localSeen.has(p.id)) {
-            localSeen.add(p.id);
-            merged.push(p);
-          }
-        }
-        seenIdsRef.current = localSeen;
+      // Merge & de-duplicate
+      setPosts((prev) => {
+        console.log('[FEED] merge prev:', prev.length, 'new:', computed.length);
+        const map = new Map<string, FeedPost>();
+        prev.forEach((p) => map.set(p.id, p));
+        computed.forEach((p) => map.set(p.id, p));
+        const merged = Array.from(map.values());
+        seenIdsRef.current = new Set(merged.map((p) => p.id));
+        console.log('[FEED] merged len:', merged.length);
         return merged;
       });
 
-      // set hasMore flag
       setHasMore(rows.length === LIMIT);
     } catch (err) {
-      console.error('[feed] exception:', err);
+      console.error('[FEED] exception:', err);
       setError('Failed to load posts. Try again later.');
     } finally {
       setLoading(false);
@@ -363,13 +271,12 @@ const Feed: React.FC<FeedProps> = ({ navigateTo, refreshSignal }) => {
     }
   }, [offset, computeLockMap]);
 
-  // Fetch on mount and when offset changes
+  // Fetch on mount + when offset changes
   useEffect(() => {
     fetchPosts();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fetchPosts]);
 
-  // Refresh signal handling
+  // Handle explicit refresh (e.g., after posting)
   useEffect(() => {
     if (typeof refreshSignal === 'number') {
       seenIdsRef.current = new Set();
@@ -378,82 +285,150 @@ const Feed: React.FC<FeedProps> = ({ navigateTo, refreshSignal }) => {
       if (offset !== 0) {
         setOffset(0);
       } else {
-        // immediate fetch
         fetchPosts();
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [refreshSignal]);
+  }, [refreshSignal, fetchPosts, offset]);
 
   const formatTimeAgo = useCallback((dateString: string) => {
-    try { return formatDistanceToNow(new Date(dateString), { addSuffix: true }); }
-    catch { return 'some time ago'; }
+    try {
+      return formatDistanceToNow(new Date(dateString), { addSuffix: true });
+    } catch {
+      return 'some time ago';
+    }
   }, []);
 
-  const handleCreatorClick = useCallback(async (creatorName: string, creatorAvatar?: string) => {
-    try {
-      const { data } = await supabase
-        .from('users')
-        .select('id, username, full_name, avatar_url, user_type')
-        .or(`full_name.eq.${creatorName},username.eq.${creatorName}`)
-        .limit(1);
-      const row = Array.isArray(data) && data.length ? data[0] : null;
-      const profile = row
-        ? { name: row.full_name || row.username || creatorName, username: row.username || row.id, avatar: row.avatar_url || creatorAvatar || 'https://i.pravatar.cc/150', category: row.user_type || 'User' }
-        : { name: creatorName, username: creatorName, avatar: creatorAvatar || 'https://i.pravatar.cc/150', category: 'User' };
-      setSelectedProfile?.({ name: profile.name, username: profile.username, avatar: profile.avatar });
-      try { window.history.pushState({}, '', `/profile/${encodeURIComponent(profile.username || profile.name)}`); } catch { /* noop */ }
-      if (navigateTo) navigateTo('creator');
-    } catch (e) {
-      console.warn('[feed] handleCreatorClick failed', e);
-      if (navigateTo) navigateTo('creator');
-    }
-  }, [navigateTo, setSelectedProfile]);
+  const handleCreatorClick = useCallback(
+    async (creatorName: string, creatorAvatar?: string) => {
+      try {
+        const { data } = await supabase
+          .from('users')
+          .select('id, username, full_name, avatar_url, user_type')
+          .or(`full_name.eq.${creatorName},username.eq.${creatorName}`)
+          .limit(1);
 
-  const renderMedia = useCallback((mediaUrls: string[] | null, locked: boolean = false) => {
-    if (!mediaUrls || mediaUrls.length === 0) return null;
+        const row = Array.isArray(data) && data.length ? data[0] : null;
+
+        const profile = row
+          ? {
+              name: row.full_name || row.username || creatorName,
+              username: row.username || row.id,
+              avatar: row.avatar_url || creatorAvatar || 'https://i.pravatar.cc/150',
+              category: row.user_type || 'User',
+            }
+          : {
+              name: creatorName,
+              username: creatorName,
+              avatar: creatorAvatar || 'https://i.pravatar.cc/150',
+              category: 'User',
+            };
+
+        setSelectedProfile?.({
+          name: profile.name,
+          username: profile.username,
+          avatar: profile.avatar,
+        });
+
+        try {
+          window.history.pushState({}, '', `/profile/${encodeURIComponent(profile.username || profile.name)}`);
+        } catch {
+          /* noop */
+        }
+
+        if (navigateTo) navigateTo('creator');
+      } catch (e) {
+        console.warn('[FEED] handleCreatorClick failed', e);
+        if (navigateTo) navigateTo('creator');
+      }
+    },
+    [navigateTo, setSelectedProfile],
+  );
+
+  const renderMedia = useCallback((media: string[], locked: boolean = false) => {
+    if (!media || media.length === 0) return null;
+
     const isVideo = (url: string) => /\.(mp4|webm|ogg)$/i.test(url);
 
-    if (mediaUrls.length === 1) {
-      const url = mediaUrls[0];
+    if (media.length === 1) {
+      const url = media[0];
       if (isVideo(url)) {
         return (
           <div className="relative w-full overflow-hidden">
-            <video src={url} className={`w-full h-auto max-h-[400px] object-cover ${locked ? 'blur-xl pointer-events-none select-none' : ''}`} controls preload="metadata" />
-          </div>
-        );
-      } else {
-        return (
-          <div className="relative w-full overflow-hidden">
-            <img src={url} alt="Post content" className={`w-full h-auto max-h-[400px] object-cover ${locked ? 'blur-xl pointer-events-none select-none' : ''}`} loading="lazy" />
+            <video
+              src={url}
+              className={`w-full h-auto max-h-[400px] object-cover ${
+                locked ? 'blur-xl pointer-events-none select-none' : ''
+              }`}
+              controls
+              preload="metadata"
+            />
           </div>
         );
       }
+      return (
+        <div className="relative w-full overflow-hidden">
+          <img
+            src={url}
+            alt="Post content"
+            className={`w-full h-auto max-h-[400px] object-cover ${
+              locked ? 'blur-xl pointer-events-none select-none' : ''
+            }`}
+            loading="lazy"
+          />
+        </div>
+      );
     }
 
     return (
       <div className="w-full overflow-hidden">
-        <div className={`grid gap-1 ${mediaUrls.length === 2 ? 'grid-cols-2' : mediaUrls.length >= 3 ? 'grid-cols-3' : 'grid-cols-1'}`}>
-          {mediaUrls.slice(0, 6).map((url, index) => {
+        <div
+          className={`grid gap-1 ${
+            media.length === 2 ? 'grid-cols-2' : media.length >= 3 ? 'grid-cols-3' : 'grid-cols-1'
+          }`}
+        >
+          {media.slice(0, 6).map((url, index) => {
             if (isVideo(url)) {
               return (
                 <div key={index} className="relative aspect-square overflow-hidden">
-                  <video src={url} className={`w-full h-full object-cover ${locked ? 'blur-xl pointer-events-none select-none' : ''}`} preload="metadata" />
+                  <video
+                    src={url}
+                    className={`w-full h-full object-cover ${
+                      locked ? 'blur-xl pointer-events-none select-none' : ''
+                    }`}
+                    preload="metadata"
+                  />
                   <div className="absolute inset-0 flex items-center justify-center bg-black/30">
-                    <svg className="w-10 h-10 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" /><polygon points="10 8 16 12 10 16 10 8" fill="currentColor" /></svg>
+                    <svg
+                      className="w-10 h-10 text-white"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                    >
+                      <circle cx="12" cy="12" r="10" />
+                      <polygon points="10 8 16 12 10 16 10 8" fill="currentColor" />
+                    </svg>
                   </div>
                 </div>
               );
-            } else {
-              return (
-                <div key={index} className="relative aspect-square overflow-hidden">
-                  <img src={url} alt={`Media ${index + 1}`} className={`w-full h-full object-cover ${locked ? 'blur-xl pointer-events-none select-none' : ''}`} loading="lazy" />
-                  {index === 5 && mediaUrls.length > 6 && (
-                    <div className="absolute inset-0 bg-black/50 flex items-center justify-center text-white font-bold text-xl">+{mediaUrls.length - 6}</div>
-                  )}
-                </div>
-              );
             }
+            return (
+              <div key={index} className="relative aspect-square overflow-hidden">
+                <img
+                  src={url}
+                  alt={`Media ${index + 1}`}
+                  className={`w-full h-full object-cover ${
+                    locked ? 'blur-xl pointer-events-none select-none' : ''
+                  }`}
+                  loading="lazy"
+                />
+                {index === 5 && media.length > 6 && (
+                  <div className="absolute inset-0 bg-black/50 flex items-center justify-center text-white font-bold text-xl">
+                    +{media.length - 6}
+                  </div>
+                )}
+              </div>
+            );
           })}
         </div>
       </div>
@@ -461,53 +436,79 @@ const Feed: React.FC<FeedProps> = ({ navigateTo, refreshSignal }) => {
   }, []);
 
   if (error) {
-    return <div className="p-4 bg-red-50 text-red-600 rounded-lg"><p>{error}</p></div>;
+    return (
+      <div className="p-4 bg-red-900/20 backdrop-blur-sm border border-red-500/30 text-red-300 rounded-xl shadow-xl">
+        <p>{error}</p>
+      </div>
+    );
   }
 
   return (
     <div className="space-y-4 sm:space-y-6">
       {posts.length === 0 && !loading ? (
-        <div className="bg-surface text-gray-100 rounded-lg sm:rounded-xl p-6 text-center border border-slate-700 shadow-sm">
-          <div className="text-gray-400 mb-3">
-            <svg className="w-12 h-12 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
+        <div className="bg-gradient-to-br from-gray-900/80 to-gray-800/80 backdrop-blur-xl text-gray-100 rounded-2xl p-8 text-center border border-pink-500/20 shadow-2xl shadow-pink-500/10">
+          <div className="w-20 h-20 mx-auto mb-6 bg-gradient-to-r from-pink-500/20 to-purple-500/20 rounded-full flex items-center justify-center">
+            <svg className="w-10 h-10 text-pink-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={1.5}
+                d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"
+              />
+            </svg>
           </div>
-          <h3 className="text-lg font-medium text-gray-100 mb-1">No posts yet</h3>
-          <p className="text-gray-400">Follow creators to see their updates.</p>
+          <h3 className="text-xl font-bold text-transparent bg-gradient-to-r from-pink-400 to-purple-400 bg-clip-text mb-2">No posts yet</h3>
+          <p className="text-gray-300 mb-4">Follow creators to see their exclusive content</p>
+          <div className="inline-flex items-center text-sm text-pink-300">
+            <span className="w-2 h-2 bg-pink-400 rounded-full mr-2 animate-pulse"></span>
+            Start discovering amazing creators
+          </div>
         </div>
       ) : (
         posts.map((post, idx) => (
           <article
             key={post.id}
             ref={idx === posts.length - 1 ? lastPostElementRef : undefined}
-            className="group bg-surface text-gray-100 rounded-lg sm:rounded-xl overflow-hidden border border-soft shadow-sm card-hover animate-in-up"
+            className="group bg-gradient-to-br from-gray-900/80 to-gray-800/80 backdrop-blur-xl text-gray-100 rounded-2xl overflow-hidden border border-pink-500/20 shadow-2xl shadow-pink-500/10 hover:shadow-pink-500/20 transition-all hover:scale-[1.02] animate-in-up"
             style={{ animationDelay: `${idx * 60}ms` }}
             aria-posinset={idx + 1}
             aria-setsize={posts.length}
             aria-roledescription="Post"
           >
-            <div className="p-3 sm:p-4">
+            <div className="p-4 sm:p-6">
               <div className="flex items-center">
-                <img
-                  src={post.creator_avatar || 'https://via.placeholder.com/40'}
-                  alt={post.creator_name}
-                  className="w-8 h-8 sm:w-10 sm:h-10 rounded-full object-cover mr-2 sm:mr-3 cursor-pointer"
-                  onClick={() => handleCreatorClick(post.creator_name, post.creator_avatar)}
-                />
+                {post.authorAvatar ? (
+                  <div className="relative">
+                    <img
+                      src={post.authorAvatar}
+                      alt={post.authorName}
+                      className="w-12 h-12 sm:w-14 sm:h-14 rounded-full object-cover mr-3 sm:mr-4 cursor-pointer ring-2 ring-pink-500/30 hover:ring-pink-400/50 transition-all"
+                      onError={(e) => { const t = e.currentTarget; t.onerror = null; t.src = '/default-avatar.png'; }}
+                      onClick={() => handleCreatorClick(post.authorName, post.authorAvatar)}
+                    />
+                    <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-gradient-to-r from-green-400 to-green-500 rounded-full border-2 border-gray-900"></div>
+                  </div>
+                ) : (
+                  <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-gradient-to-r from-gray-700 to-gray-800 mr-3 sm:mr-4 flex items-center justify-center text-gray-400 cursor-default ring-2 ring-gray-600/30">
+                    <UserIcon className="w-6 h-6" />
+                  </div>
+                )}
                 <div className="flex-1">
                   <div className="flex items-center justify-between">
                     <div>
                       <h3
-                        className="font-medium text-sm sm:text-base leading-tight cursor-pointer hover:underline text-gray-100"
-                        onClick={() => handleCreatorClick(post.creator_name, post.creator_avatar)}
-                        title={`View ${post.creator_name}'s profile`}
+                        className="font-bold text-base sm:text-lg leading-tight cursor-pointer hover:text-pink-300 transition-colors text-white"
+                        onClick={() => handleCreatorClick(post.authorName, post.authorAvatar)}
+                        title={`View ${post.authorName}'s profile`}
                       >
-                        {post.creator_name || 'Unknown'}
+                        {post.authorName || 'Unknown'}
                       </h3>
-                      <p className="text-xs text-gray-400">
-                        {formatTimeAgo(post.created_at)}
+                      <p className="text-xs text-gray-400 flex items-center font-medium">
+                        {formatTimeAgo(post.createdAt)}
+                        <VisibilityIcon visibility={post.visibility} />
                       </p>
                     </div>
-                    <span className={`text-xs px-2 py-0.5 rounded-md ${badgeClassForTier(post.category)}`}>
+                    <span className={`text-xs px-3 py-1.5 rounded-full font-medium ${badgeClassForTier(post.category)}`}>
                       {post.category ?? 'Public'}
                     </span>
                   </div>
@@ -516,50 +517,88 @@ const Feed: React.FC<FeedProps> = ({ navigateTo, refreshSignal }) => {
             </div>
 
             {/* Content */}
-            <div className="px-3 sm:px-4 pb-2 sm:pb-3">
-              {post.content && <p className="mb-2 text-sm sm:text-base leading-relaxed text-gray-200">{post.content}</p>}
+            <div className="px-4 sm:px-6 pb-3 sm:pb-4">
+              {!post.isLocked && post.content && (
+                <p className="mb-3 text-sm sm:text-base leading-relaxed text-gray-200">
+                  {post.content}
+                </p>
+              )}
+              {post.isLocked && (
+                <div className="mb-3 rounded-xl border border-pink-500/30 bg-gradient-to-r from-pink-900/20 to-purple-900/20 backdrop-blur-sm p-4 text-center">
+                  <div className="flex items-center justify-center gap-2 text-pink-300">
+                    <Lock className="h-5 w-5" />
+                    <span className="text-sm font-medium">This post is locked. Subscribe to unlock exclusive content.</span>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Media + lock overlay */}
-            {post.media_urls && post.media_urls.length > 0 && (
-              <div className="relative w-full overflow-hidden rounded-xl border border-soft mx-3 sm:mx-4 mb-2 sm:mb-3">
-                {renderMedia(post.media_urls, post.is_locked)}
-                {post.is_locked && (
-                  <div className="absolute inset-0 flex items-center justify-center bg-black/40">
+            {post.media && post.media.length > 0 && (
+              <div className="relative w-full overflow-hidden rounded-2xl border border-pink-500/20 mx-4 sm:mx-6 mb-3 sm:mb-4 shadow-xl">
+                {renderMedia(post.media, post.isLocked)}
+                {post.isLocked && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/60 backdrop-blur-sm">
                     <div className="text-center px-4">
-                      <Lock className="h-8 w-8 sm:h-12 sm:w-12 mx-auto mb-1 sm:mb-2 text-white" />
-                      <h4 className="text-base sm:text-lg font-medium text-white mb-1">Content Locked</h4>
-                      <p className="text-xs sm:text-sm text-gray-200 mb-3 sm:mb-4">Support this creator to unlock</p>
-                      <button className="bg-primary hover:bg-primary-dark text-gray-900 font-medium px-4 sm:px-6 py-1.5 sm:py-2 text-sm rounded-full transition-all hover:shadow-[0_8px_26px_rgba(255,90,136,0.35)]">Support</button>
+                      <div className="w-16 h-16 mx-auto mb-4 bg-gradient-to-r from-pink-500/20 to-purple-500/20 rounded-full flex items-center justify-center">
+                        <Lock className="h-8 w-8 text-pink-400" />
+                      </div>
+                      <h4 className="text-lg sm:text-xl font-bold text-white mb-2">
+                        Premium Content
+                      </h4>
+                      <p className="text-sm text-gray-200 mb-4">
+                        Subscribe to unlock exclusive content
+                      </p>
+                      <button className="bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 text-white font-medium px-6 sm:px-8 py-2.5 sm:py-3 text-sm rounded-full transition-all shadow-lg shadow-pink-500/25 hover:shadow-pink-500/40">
+                        Subscribe Now
+                      </button>
                     </div>
                   </div>
                 )}
               </div>
             )}
 
-            <div className="px-3 sm:px-4 pt-2 sm:pt-3 pb-3 flex items-center justify-between bg-surface">
-              <div className="flex items-center space-x-4">
-                <button className="flex items-center text-gray-300 hover:text-primary transition-colors" aria-label="Like">
-                  <Heart className="h-4 w-4 sm:h-5 sm:w-5 mr-1" />
-                  <span className="text-xs sm:text-sm">{post.likes_count || 0}</span>
+            <div className="px-4 sm:px-6 pt-3 sm:pt-4 pb-4 flex items-center justify-between border-t border-pink-500/20 bg-gradient-to-r from-gray-900/50 to-gray-800/50">
+              <div className="flex items-center space-x-6">
+                <button
+                  className="flex items-center text-gray-300 hover:text-pink-400 transition-all hover:scale-105 group"
+                  aria-label="Like"
+                >
+                  <Heart className="h-5 w-5 sm:h-6 sm:w-6 mr-2 group-hover:fill-pink-400" />
+                  <span className="text-sm sm:text-base font-medium">{post.likesCount || 0}</span>
                 </button>
-                <button className="flex items-center text-gray-300 hover:text-primary transition-colors" aria-label="Comment">
-                  <MessageSquare className="h-4 w-4 sm:h-5 sm:w-5 mr-1" />
-                  <span className="text-xs sm:text-sm">{post.comments_count || 0}</span>
+                <button
+                  className="flex items-center text-gray-300 hover:text-blue-400 transition-all hover:scale-105 group"
+                  aria-label="Comment"
+                >
+                  <MessageSquare className="h-5 w-5 sm:h-6 sm:w-6 mr-2 group-hover:fill-blue-400" />
+                  <span className="text-sm sm:text-base font-medium">{post.commentsCount || 0}</span>
                 </button>
-                <button className="flex items-center text-gray-300 hover:text-primary transition-colors" aria-label="Share">
-                  <Share2 className="h-4 w-4 sm:h-5 sm:w-5" />
+                <button
+                  className="flex items-center text-gray-300 hover:text-purple-400 transition-all hover:scale-105 group"
+                  aria-label="Share"
+                >
+                  <Share2 className="h-5 w-5 sm:h-6 sm:w-6 group-hover:scale-110" />
                 </button>
               </div>
-              <div className="flex items-center">{/* reserved */}</div>
+              <div className="flex items-center">
+                <button className="text-gray-400 hover:text-pink-400 transition-colors">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h.01M12 12h.01M19 12h.01M6 12a1 1 0 11-2 0 1 1 0 012 0zm7 0a1 1 0 11-2 0 1 1 0 012 0zm7 0a1 1 0 11-2 0 1 1 0 012 0z" />
+                  </svg>
+                </button>
+              </div>
             </div>
           </article>
         ))
       )}
 
       {loading && (
-        <div className="flex justify-center items-center py-4">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+        <div className="flex justify-center items-center py-8">
+          <div className="relative">
+            <div className="animate-spin rounded-full h-12 w-12 border-2 border-pink-500/20 border-t-pink-500" />
+            <div className="absolute inset-0 rounded-full bg-gradient-to-r from-pink-500/20 to-purple-500/20 animate-pulse" />
+          </div>
         </div>
       )}
     </div>

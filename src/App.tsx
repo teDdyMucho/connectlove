@@ -8,6 +8,7 @@ import { AuthProvider, useAuth } from './components/AuthContext';
 import { Page } from './components/types';
 import UserProfile from './components/userProfile/userProfile';
 import SearchProfile from './landingPage/serachProfile';
+import Wallet from './wallet/Wallet';
 
 function AppContent() {
   const { currentPage, userType, navigateTo, setUserTypeValue } = useAuth();
@@ -229,7 +230,7 @@ function AppContent() {
     // Create a type-safe wrapper for navigation
     const safeNavigate = (page: string) => {
       // Only navigate to valid pages
-      if (['landing', 'signin', 'signup', 'main', 'creator', 'profile', 'messages', 'search', ''].includes(page)) {
+      if (['landing', 'signin', 'signup', 'main', 'creator', 'profile', 'messages', 'search', 'wallet', ''].includes(page)) {
         // Type assertion to Page type
         navigateTo(page as Page);
       } else {
@@ -254,6 +255,8 @@ function AppContent() {
         return <Messages navigateTo={safeNavigate} />;
       case 'search':
         return <SearchProfile navigateTo={safeNavigate} />;
+      case 'wallet':
+        return <Wallet navigateTo={safeNavigate} />;
       default:
         return <LandingPage />;
     }

@@ -109,8 +109,9 @@ const MainPage: React.FC<MainPageProps> = ({ navigateTo }) => {
     let mounted = true;
     (async () => {
       try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user?.id) {
+        const { data: sessionData } = await supabase.auth.getSession();
+        const uid = sessionData?.session?.user?.id ?? null;
+        if (!uid) {
           if (mounted) {
             setCurrentProfile(null);
           }
@@ -119,7 +120,7 @@ const MainPage: React.FC<MainPageProps> = ({ navigateTo }) => {
         const { data, error } = await supabase
           .from('users')
           .select('id, full_name, username, avatar_url, user_type, email')
-          .eq('id', user.id)
+          .eq('id', uid)
           .limit(1);
         if (error) {
           console.warn('[MainPage] profile fetch error:', error.message);
@@ -127,9 +128,9 @@ const MainPage: React.FC<MainPageProps> = ({ navigateTo }) => {
         const row = Array.isArray(data) && data.length ? data[0] as { id?: string | null; full_name?: string | null; username?: string | null; avatar_url?: string | null; user_type?: string | null; email?: string | null } : null;
         if (mounted) {
           setCurrentProfile({
-            id: row?.id || user.id,
-            user_id: row?.id || user.id,
-            email: row?.email ?? user.email ?? null,
+            id: row?.id || uid,
+            user_id: row?.id || uid,
+            email: row?.email ?? null,
             full_name: row?.full_name ?? null,
             username: row?.username ?? null,
             avatar_url: row?.avatar_url ?? null,
@@ -249,13 +250,13 @@ const MainPage: React.FC<MainPageProps> = ({ navigateTo }) => {
   ];
 
   return (
-    <div className="main-page bg-background text-gray-100 min-h-screen flex flex-col relative scroll-smooth overflow-x-hidden">
+    <div className="main-page bg-gradient-to-br from-gray-900 via-black to-gray-900 text-gray-100 min-h-screen flex flex-col relative scroll-smooth overflow-x-hidden">
 
       {/* Header */}
-      <header className="bg-surface shadow-sm h-16 px-3 sm:px-4 fixed top-0 left-0 right-0 z-50 backdrop-blur-md supports-[backdrop-filter]:bg-surface/90 border-b border-soft">
+      <header className="bg-black/20 backdrop-blur-xl border-b border-pink-500/20 shadow-lg shadow-pink-500/10 h-16 px-3 sm:px-4 fixed top-0 left-0 right-0 z-50">
         <div className="max-w-6xl mx-auto h-full flex items-center justify-between">
-          <div className="text-primary font-bold text-lg sm:text-xl tracking-tight flex items-center">
-            <img src="/images/Clove_logo2.png" alt="ConnectLove Logo" className="h-12 sm:h-12 w-auto" />
+          <div className="text-transparent bg-gradient-to-r from-pink-400 to-purple-600 bg-clip-text font-bold text-lg sm:text-xl tracking-tight flex items-center">
+            <img src="/images/Clove_logo2.png" alt="ConnectLove Logo" className="h-12 sm:h-12 w-auto mr-2" />
           </div>
           <div className="flex items-center space-x-2 sm:space-x-4">
             {/* Search - Hidden on mobile, shown as icon that expands */}
@@ -275,19 +276,19 @@ const MainPage: React.FC<MainPageProps> = ({ navigateTo }) => {
               >
                 <input
                   type="text"
-                  placeholder="Search..."
-                  className="bg-surface rounded-full py-2 pl-4 pr-9 text-sm w-48 sm:w-60 md:w-72 border border-soft focus:border-primary/60 focus:outline-none focus:ring-0 transition-colors text-gray-100"
+                  placeholder="Search creators..."
+                  className="bg-gray-800/50 backdrop-blur-sm rounded-full py-2 pl-4 pr-9 text-sm w-48 sm:w-60 md:w-72 border border-gray-700/50 focus:border-pink-500/60 focus:outline-none focus:ring-2 focus:ring-pink-500/20 transition-all text-gray-100 placeholder-gray-400"
                   value={headerQuery}
                   onChange={(e) => setHeaderQuery(e.target.value)}
                 />
                 <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
                 {showSearchDropdown && suggestions.length > 0 && (
-                  <div className="absolute z-50 mt-2 left-0 right-0 bg-surface border border-soft rounded-lg shadow-lg max-h-64 overflow-y-auto dropdown-animation">
+                  <div className="absolute z-50 mt-2 left-0 right-0 bg-gray-900/95 backdrop-blur-xl border border-pink-500/20 rounded-xl shadow-2xl shadow-pink-500/10 max-h-64 overflow-y-auto dropdown-animation">
                     {suggestions.map((s) => (
                       <button
                         key={s.id}
                         type="button"
-                        className="w-full text-left px-3 py-2 hover:bg-surface-light flex items-center gap-3 transition-colors text-gray-100"
+                        className="w-full text-left px-3 py-2 hover:bg-gradient-to-r hover:from-pink-500/10 hover:to-purple-500/10 flex items-center gap-3 transition-all text-gray-100 hover:text-pink-300"
                         onMouseDown={(e) => e.preventDefault()}
                         onClick={() => handleSelectSuggestion(s)}
                       >
@@ -312,8 +313,9 @@ const MainPage: React.FC<MainPageProps> = ({ navigateTo }) => {
               <Search className="h-5 w-5" />
             </button>
 
-            <button className="text-gray-300 hover:text-primary transition-colors icon-bounce p-2" aria-label="Notifications">
+            <button className="text-gray-300 hover:text-pink-400 transition-colors icon-bounce p-2 relative" aria-label="Notifications">
               <Bell className="h-5 w-5" />
+              <div className="absolute -top-1 -right-1 w-3 h-3 bg-gradient-to-r from-pink-500 to-red-500 rounded-full animate-pulse"></div>
             </button>
 
             {/* Profile Dropdown */}
@@ -321,7 +323,7 @@ const MainPage: React.FC<MainPageProps> = ({ navigateTo }) => {
               <button
                 ref={buttonRef}
                 onClick={toggleDropdown}
-                className="bg-primary hover:bg-primary-dark rounded-full p-1 ring-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 transition"
+                className="bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 rounded-full p-1 ring-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pink-500/50 transition-all shadow-lg shadow-pink-500/25"
                 aria-label="Open profile menu"
               >
                 <User className="h-5 w-5 text-white" />
@@ -340,17 +342,17 @@ const MainPage: React.FC<MainPageProps> = ({ navigateTo }) => {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 max-w-8xl mx-auto px-2 sm:px-4 lg:pr-[380px] xl:pr-[480px] 2xl:pr-[500px] 3xl:pr-[540px] mt-20 md:mt-28">
         {/* Left Sidebar */}
         <aside className="hidden lg:block lg:col-span-3">
-          <div className="bg-surface rounded-xl border border-soft shadow-sm sticky top-28 overflow-hidden">
+          <div className="bg-gray-900/50 backdrop-blur-xl rounded-2xl border border-pink-500/20 shadow-2xl shadow-pink-500/10 sticky top-28 overflow-hidden">
             {/* User Profile Section removed as requested */}
             
             {/* Main Navigation */}
             <div className="p-2">
-              <h4 className="text-xs font-medium text-gray-400 px-3 py-2">Main Menu</h4>
+              <h4 className="text-xs font-medium text-pink-300 px-3 py-2 uppercase tracking-wider">Main Menu</h4>
               <nav className="space-y-1">
                 <a
                   href="#"
                   onClick={(e) => { e.preventDefault(); scrollToTop(); }}
-                  className="flex items-center space-x-3 px-3 py-2.5 rounded-lg bg-primary/10 text-primary"
+                  className="flex items-center space-x-3 px-3 py-2.5 rounded-xl bg-gradient-to-r from-pink-500/20 to-purple-500/20 text-pink-300 border border-pink-500/30 shadow-lg shadow-pink-500/10"
                 >
                   <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <rect x="3" y="3" width="7" height="7"></rect>
@@ -363,7 +365,7 @@ const MainPage: React.FC<MainPageProps> = ({ navigateTo }) => {
                 <a
                   href="#"
                   onClick={(e) => { e.preventDefault(); scrollToFeed(); }}
-                  className="flex items-center space-x-3 px-3 py-2.5 rounded-lg hover:bg-surface-light text-gray-100 hover:text-primary transition-colors"
+                  className="flex items-center space-x-3 px-3 py-2.5 rounded-xl hover:bg-gradient-to-r hover:from-pink-500/10 hover:to-purple-500/10 text-gray-300 hover:text-pink-300 transition-all hover:border hover:border-pink-500/20"
                 >
                   <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M18 8h1a4 4 0 0 1 0 8h-1"></path>
@@ -377,17 +379,22 @@ const MainPage: React.FC<MainPageProps> = ({ navigateTo }) => {
                 <a
                   href="#"
                   onClick={(e) => { e.preventDefault(); navigateTo('messages'); }}
-                  className="flex items-center space-x-3 px-3 py-2.5 rounded-lg hover:bg-surface-light text-gray-100 hover:text-primary transition-colors"
+                  className="flex items-center space-x-3 px-3 py-2.5 rounded-xl hover:bg-gradient-to-r hover:from-pink-500/10 hover:to-purple-500/10 text-gray-300 hover:text-pink-300 transition-all hover:border hover:border-pink-500/20"
                 >
                   <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
                   </svg>
                   <span>Messages</span>
                 </a>
-                <a href="#" className="flex items-center space-x-3 px-3 py-2.5 rounded-lg hover:bg-surface-light text-gray-100 hover:text-primary transition-colors">
+                <a
+                  href="#"
+                  onClick={(e) => { e.preventDefault(); navigateTo('wallet'); }}
+                  className="flex items-center space-x-3 px-3 py-2.5 rounded-xl hover:bg-gradient-to-r hover:from-pink-500/10 hover:to-purple-500/10 text-gray-300 hover:text-pink-300 transition-all hover:border hover:border-pink-500/20"
+                >
                   <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <rect x="1" y="4" width="22" height="16" rx="2" ry="2"></rect>
-                    <line x1="1" y1="10" x2="23" y2="10"></line>
+                    <path d="M3 7h18a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2z" />
+                    <path d="M16 11h4v4h-4a2 2 0 0 1-2-2v0a2 2 0 0 1 2-2z" />
+                    <circle cx="18" cy="13" r="1" />
                   </svg>
                   <span>Wallet</span>
                 </a>
@@ -399,22 +406,12 @@ const MainPage: React.FC<MainPageProps> = ({ navigateTo }) => {
                   </svg>
                   <span>Subscriptions</span>
                 </a>
-                <a href="#" className="flex items-center space-x-3 px-3 py-2.5 rounded-lg hover:bg-surface-light text-gray-100 hover:text-primary transition-colors">
-                  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                    <polyline points="14 2 14 8 20 8"></polyline>
-                    <line x1="16" y1="13" x2="8" y2="13"></line>
-                    <line x1="16" y1="17" x2="8" y2="17"></line>
-                    <polyline points="10 9 9 9 8 9"></polyline>
-                  </svg>
-                  <span>Orders</span>
-                </a>
               </nav>
             </div>
             
             {/* Creator Settings */}
-            <div className="p-2 border-t border-soft mt-2">
-              <h4 className="text-xs font-medium text-gray-400 px-3 py-2">Creator Settings</h4>
+            <div className="p-2 border-t border-pink-500/20 mt-2">
+              <h4 className="text-xs font-medium text-pink-300 px-3 py-2 uppercase tracking-wider">Creator Settings</h4>
               <nav className="space-y-1">
                 <a href="#" className="flex items-center space-x-3 px-3 py-2.5 rounded-lg hover:bg-surface-light text-gray-100 hover:text-primary transition-colors">
                   <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -444,7 +441,7 @@ const MainPage: React.FC<MainPageProps> = ({ navigateTo }) => {
             </div>
             
             {/* Action Buttons */}
-            <div className="p-3 space-y-2 border-t border-soft mt-2">
+            <div className="p-3 space-y-2 border-t border-pink-500/20 mt-2">
               {currentProfile?.user_type === 'creator' ? (
                 <button
                   onClick={handleGoToCreatorView}
@@ -507,9 +504,9 @@ const MainPage: React.FC<MainPageProps> = ({ navigateTo }) => {
             
             {/* Suggested Creators Row (Clean vertical cards in horizontal scroll) */}
             <div className="mb-4 sm:mb-6">
-              <div className="flex items-center justify-between mb-2">
-                <h2 className="text-base sm:text-lg font-medium text-gray-100">Suggested Creators</h2>
-                <button className="text-xs text-primary hover:text-primary-dark transition-colors flex items-center">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-base sm:text-lg font-bold text-transparent bg-gradient-to-r from-pink-400 to-purple-400 bg-clip-text">Featured Creators</h2>
+                <button className="text-xs text-pink-400 hover:text-pink-300 transition-colors flex items-center font-medium">
                   View all creators
                   <svg className="w-3 h-3 ml-1" viewBox="0 0 20 20" fill="currentColor">
                     <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
@@ -519,48 +516,51 @@ const MainPage: React.FC<MainPageProps> = ({ navigateTo }) => {
               <div className="overflow-x-auto hide-scrollbar">
                 <div className="flex space-x-3 py-2">
                   {suggestedCreators.map((creator) => (
-                    <div key={creator.id} className="flex-shrink-0 w-[180px] bg-surface rounded-xl border border-soft overflow-hidden">
-                      <div className="cursor-pointer">
-                        <div className="flex flex-col">
-                          <div className="p-3 pb-2">
-                            <div className="flex items-center">
-                              <img 
-                                src={creator.avatar} 
-                                alt={creator.name} 
-                                className="w-10 h-10 rounded-full object-cover mr-3"
-                              />
-                              <div className="flex-1 min-w-0">
-                                <h3 className="font-medium text-sm truncate text-gray-100">{creator.name}</h3>
+                    <div key={creator.id} className="flex-shrink-0 w-[200px] bg-gradient-to-br from-gray-900/80 to-gray-800/80 backdrop-blur-xl rounded-2xl border border-pink-500/20 overflow-hidden shadow-xl shadow-pink-500/10 hover:shadow-pink-500/20 transition-all hover:scale-105">
+                      <div className="cursor-pointer group">
+                        <div className="flex flex-col h-full">
+                          <div className="p-4">
+                            <div className="flex items-center mb-3">
+                              <div className="relative">
+                                <img 
+                                  src={creator.avatar} 
+                                  alt={creator.name} 
+                                  className="w-12 h-12 rounded-full object-cover ring-2 ring-pink-500/30 group-hover:ring-pink-400/50 transition-all"
+                                />
+                                <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-gradient-to-r from-green-400 to-green-500 rounded-full border-2 border-gray-900"></div>
+                              </div>
+                              <div className="ml-3 flex-1 min-w-0">
+                                <h3 className="font-semibold text-sm truncate text-white group-hover:text-pink-300 transition-colors">{creator.name}</h3>
                                 <div className="flex items-center">
                                   <span className="text-xs text-yellow-400 mr-1">★</span>
-                                  <span className="text-xs text-yellow-400">{creator.rating}</span>
+                                  <span className="text-xs text-yellow-400 font-medium">{creator.rating}</span>
                                 </div>
                               </div>
                             </div>
-                            <div className="mt-2">
-                              <p className="text-xs text-gray-400">{creator.category}</p>
-                              <p className="text-xs text-gray-400">{creator.supporters} supporters</p>
+                            <div className="space-y-1">
+                              <p className="text-xs text-pink-300 font-medium">{creator.category}</p>
+                              <p className="text-xs text-gray-400">{creator.supporters} subscribers</p>
                             </div>
                           </div>
-                          <div className="mt-auto border-t border-soft">
-                            <button className="w-full py-2 text-xs text-primary hover:text-primary-dark transition-colors font-medium">
-                              View Profile
+                          <div className="mt-auto border-t border-pink-500/20">
+                            <button className="w-full py-3 text-xs bg-gradient-to-r from-pink-500/20 to-purple-500/20 hover:from-pink-500/30 hover:to-purple-500/30 text-pink-300 hover:text-white transition-all font-medium">
+                              Subscribe
                             </button>
                           </div>
                         </div>
                       </div>
                     </div>
                   ))}
-                  <div className="flex-shrink-0 w-[180px] bg-surface rounded-xl border border-soft overflow-hidden flex items-center justify-center h-[120px]">
+                  <div className="flex-shrink-0 w-[200px] bg-gradient-to-br from-gray-900/50 to-gray-800/50 backdrop-blur-xl rounded-2xl border border-pink-500/20 overflow-hidden flex items-center justify-center h-[160px] hover:border-pink-400/40 transition-all cursor-pointer group">
                     <div className="text-center">
                       <div className="flex justify-center">
-                        <div className="w-10 h-10 rounded-full bg-surface-light flex items-center justify-center">
-                          <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <div className="w-12 h-12 rounded-full bg-gradient-to-r from-pink-500/20 to-purple-500/20 flex items-center justify-center group-hover:from-pink-500/30 group-hover:to-purple-500/30 transition-all">
+                          <svg className="w-6 h-6 text-pink-400 group-hover:text-pink-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
                           </svg>
                         </div>
                       </div>
-                      <p className="text-xs text-gray-400 mt-2">Discover More</p>
+                      <p className="text-xs text-pink-300 mt-2 font-medium">Discover More</p>
                     </div>
                   </div>
                 </div>

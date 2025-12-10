@@ -1,11 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Heart, Settings, Lock, User, X, Search, Bell, MessageCircle, Share2, Eye } from 'lucide-react';
+import { Heart, Settings, Lock, User, X, Search, Bell, MessageCircle, Share2, Eye, Users, Globe, FileText, Image, Video, Radio } from 'lucide-react';
 import './creator.css';
 import ProfileDropdown from '../components/ProfileDropdown';
 import { useAuth } from '../components/AuthContext';
 import handleSupportCreator from './subscriptions';
 import { supabase } from '../lib/supabaseClient';
 import { formatDistanceToNow } from 'date-fns';
+import UserImageGallery from '../components/userProfile/userImageGallery';
 
 
 
@@ -19,11 +20,13 @@ interface PostWithMedia {
   title: string;
   content: string;
   category: string;
-  visibility: 'public' | 'private' | 'supporters';
+  visibility: string;
   created_at: string;
   media_urls: string[];
   author_name?: string;
   author_username?: string;
+  author_avatar?: string | null;
+  is_locked?: boolean;
 }
 
 const Creator: React.FC<CreatorProps> = ({ navigateTo }) => {
@@ -38,6 +41,8 @@ const Creator: React.FC<CreatorProps> = ({ navigateTo }) => {
   const [posts, setPosts] = useState<PostWithMedia[]>([]);
   const [isLoadingPosts, setIsLoadingPosts] = useState(false);
   const [postError, setPostError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'Post' | 'Picture' | 'Videos' | 'Streaming'>('Post');
+  const [creatorContentUserId, setCreatorContentUserId] = useState<string | null>(null);
   // All subscriptions for the logged-in user (deduped by creator_id -> latest row)
   const [mySubs, setMySubs] = useState<Record<string, { tier: string | null; created_at: string; following?: boolean | null }>>({});
   const [supporterDbId, setSupporterDbId] = useState<string>('');
@@ -417,60 +422,120 @@ const Creator: React.FC<CreatorProps> = ({ navigateTo }) => {
   const displayRating = selectedProfile?.rating;
   const authorName = displayName;
 
-  // Fetch posts from the post_with_media table for the selected profile
+  // Tier helpers to match Feed UI
+  type Tier = 'Public' | 'Bronze' | 'Silver' | 'Gold' | 'Platinum';
+  const normalizeTier = (v?: string | null): Tier => {
+    if (!v) return 'Public';
+    const t = String(v).trim();
+    if (['Bronze', 'Silver', 'Gold', 'Platinum'].includes(t)) return t as Tier;
+    return 'Public';
+  };
+  const badgeClassForTier = (tier?: string | null) => {
+    const t = normalizeTier(tier);
+    switch (t) {
+      case 'Bronze': return 'bg-gradient-to-r from-amber-600 to-amber-700 text-white shadow-lg shadow-amber-500/20';
+      case 'Silver': return 'bg-gradient-to-r from-slate-400 to-slate-500 text-white shadow-lg shadow-slate-400/20';
+      case 'Gold': return 'bg-gradient-to-r from-yellow-400 to-yellow-500 text-black shadow-lg shadow-yellow-400/20';
+      case 'Platinum': return 'bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-lg shadow-blue-500/20';
+      default: return 'bg-gradient-to-r from-green-500 to-emerald-600 text-white shadow-lg shadow-green-500/20';
+    }
+  };
+
+  const VisibilityIcon: React.FC<{ visibility?: string | null }> = ({ visibility }) => {
+    const v = (visibility || 'public').toLowerCase();
+    const cls = 'inline-block align-middle ml-2 text-gray-300';
+    if (v === 'private' || v === 'only me') return <User className={`h-3.5 w-3.5 ${cls}`} />;
+    if (v === 'friends' || v === 'supporters' || v === 'friend') return <Users className={`h-3.5 w-3.5 ${cls}`} />;
+    return <Globe className={`h-3.5 w-3.5 ${cls}`} />; // public/global
+  };
+
+  // Resolve viewer id from localStorage (same strategy as Feed)
+  const resolveViewerIdFromStorage = (): string | null => {
+    try {
+      const ls = window.localStorage;
+      const candidates = [
+        ls.getItem('current_user_id'),
+        ls.getItem('public_id'),
+        ls.getItem('user_id'),
+        ls.getItem('viewing_user_id'),
+      ];
+      for (const raw of candidates) {
+        const v = raw?.trim();
+        if (v && v !== 'null' && v !== 'undefined') return v;
+      }
+      const rawProfile = ls.getItem('user_profile');
+      if (rawProfile) {
+        const parsed = JSON.parse(rawProfile) as { id?: string; user_id?: string };
+        return parsed?.id || parsed?.user_id || null;
+      }
+      return null;
+    } catch { return null; }
+  };
+
+  // Fetch posts for this creator using the RPC so is_locked is accurate
   useEffect(() => {
     const fetchPosts = async () => {
       if (!selectedProfile?.username && !selectedProfile?.name) return;
-      
       setIsLoadingPosts(true);
       setPostError(null);
-      
       try {
-        // Get the user_id for the selected profile
         const profileIdentifier = selectedProfile?.username || selectedProfile?.name || '';
-        const userId = await resolveUserId(profileIdentifier);
-        
-        if (!userId) {
+        const creatorUserId = await resolveUserId(profileIdentifier);
+        if (!creatorUserId) {
           setPostError('Could not identify the creator');
           setIsLoadingPosts(false);
           return;
         }
-        
-        // Fetch posts from post_with_media table
-        const { data, error } = await supabase
-          .from('post_with_media')
-          .select('*')
-          .eq('user_id', userId)
-          .order('created_at', { ascending: false });
-          
-        if (error) {
-          console.error('Error fetching posts:', error);
-          setPostError('Failed to load posts');
-          setIsLoadingPosts(false);
-          return;
+
+        // store for use by Picture tab (gallery)
+        setCreatorContentUserId(creatorUserId);
+
+        const viewerId = resolveViewerIdFromStorage();
+        const { data: rpcData, error: rpcErr } = await supabase.rpc('fetch_feed_posts', {
+          viewer_id: viewerId,
+          limit_count: 50,
+          offset_count: 0,
+        });
+        if (rpcErr) {
+          console.log('[creator] RPC error:', rpcErr);
         }
-        
-        // Process the posts data
-        if (data && Array.isArray(data)) {
-          const processedPosts = data.map(post => ({
-            ...post,
-            media_urls: Array.isArray(post.media_urls) ? post.media_urls : [],
-            author_name: selectedProfile?.name || '',
-            author_username: selectedProfile?.username || ''
-          })) as PostWithMedia[];
-          
-          setPosts(processedPosts);
-        } else {
-          setPosts([]);
-        }
-      } catch (error) {
-        console.error('Error in fetchPosts:', error);
-        setPostError('An unexpected error occurred');
+        type RpcRowMinimal = {
+          id: string;
+          user_id: string;
+          title?: string | null;
+          content?: string | null;
+          category?: string | null;
+          visibility?: string | null;
+          created_at?: string | null;
+          media_urls?: string[] | null;
+          creator_name?: string | null;
+          creator_avatar?: string | null;
+          is_locked?: boolean | null;
+        };
+        const rows: RpcRowMinimal[] = Array.isArray(rpcData) ? (rpcData as RpcRowMinimal[]) : [];
+        const filtered = rows.filter(r => String(r.user_id) === String(creatorUserId));
+        const processed: PostWithMedia[] = filtered.map((r) => ({
+          id: String(r.id),
+          user_id: String(r.user_id),
+          title: String(r.title ?? ''),
+          content: String(r.content ?? ''),
+          category: String(r.category ?? 'Public'),
+          visibility: String(r.visibility ?? 'public'),
+          created_at: String(r.created_at ?? new Date().toISOString()),
+          media_urls: Array.isArray(r.media_urls) ? r.media_urls : [],
+          author_name: selectedProfile?.name || r.creator_name || '',
+          author_username: selectedProfile?.username || '',
+          author_avatar: r.creator_avatar ?? null,
+          is_locked: Boolean(r.is_locked ?? false),
+        }));
+        setPosts(processed);
+      } catch (e) {
+        console.error('[creator] fetchPosts exception:', e);
+        setPostError('Failed to load posts');
       } finally {
         setIsLoadingPosts(false);
       }
     };
-    
     fetchPosts();
   }, [selectedProfile?.username, selectedProfile?.name]);
   
@@ -483,18 +548,14 @@ const Creator: React.FC<CreatorProps> = ({ navigateTo }) => {
     }
   };
   
-  // Check if a post should be locked based on visibility and user's subscription
+  // Lock flag from RPC (already computed server-side)
   const isPostLocked = (post: PostWithMedia): boolean => {
-    // If post is public, it's not locked
-    if (post.visibility === 'public') return false;
-    
-    // If post is for supporters only, check if user is a supporter
-    if (post.visibility === 'supporters') {
-      return !currentTag; // Locked if user doesn't have a subscription tier
-    }
-    
-    // If post is private, it's always locked for other users
-    return post.visibility === 'private';
+    // owner unlock safeguard (if ever needed)
+    try {
+      const viewer = resolveViewerIdFromStorage();
+      if (viewer && viewer === post.user_id) return false;
+    } catch { /* ignore */ }
+    return Boolean(post.is_locked);
   };
 
   const handleBackToFeed = () => {
@@ -557,61 +618,61 @@ const Creator: React.FC<CreatorProps> = ({ navigateTo }) => {
       {/* Profile Section */}
       <div className="flex flex-col md:flex-row max-w-6xl mx-auto pt-16 sm:pt-20 px-2 sm:px-4">
         {/* Left Profile Section */}
-        <div className="profile-section md:w-1/3 relative p-3 sm:p-4 md:p-6 flex flex-col items-center bg-[#121212] rounded-lg shadow-md my-3 sm:my-4 mx-0 sm:mx-2 overflow-y-auto">
-        <div className="profile-avatar w-16 h-16 sm:w-20 sm:h-20 md:w-24 md:h-24 border-3 sm:border-4 border-[#121212] rounded-full overflow-hidden bg-gray-800 mb-3 sm:mb-4 relative shadow-md">
+        <div className="profile-section md:w-1/3 relative p-4 sm:p-6 md:p-8 flex flex-col items-center bg-gradient-to-br from-gray-900/90 to-gray-800/90 backdrop-blur-xl rounded-2xl shadow-2xl shadow-pink-500/10 border border-pink-500/20 my-3 sm:my-4 mx-0 sm:mx-2 overflow-y-auto">
+        <div className="profile-avatar w-20 h-20 sm:w-24 sm:h-24 md:w-28 md:h-28 rounded-full overflow-hidden bg-gradient-to-br from-gray-700 to-gray-800 mb-4 sm:mb-6 relative shadow-2xl ring-4 ring-pink-500/30 hover:ring-pink-400/50 transition-all">
             <div className="w-full h-full flex items-center justify-center text-gray-400">
               <User className="h-10 w-10 sm:h-12 sm:w-12 md:h-16 md:w-16" />
             </div>
-            <div className="absolute bottom-0.5 sm:bottom-1 right-0.5 sm:right-1 w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-5 bg-green-500 rounded-full border-2 border-[#121212] pulse-animation"></div>
+            <div className="absolute -bottom-1 -right-1 w-6 h-6 sm:w-7 sm:h-7 md:w-8 md:h-8 bg-gradient-to-r from-green-400 to-green-500 rounded-full border-3 border-gray-900 shadow-lg animate-pulse"></div>
           </div>
           
-          <h1 className="text-lg sm:text-xl font-bold text-center text-white">{displayName || ' '}</h1>
-          <p className="text-pink-500 text-xs sm:text-sm mb-1 sm:mb-2">{displayUsername}</p>
-          <p className="text-gray-400 text-xs sm:text-sm text-center mb-3 sm:mb-4 line-clamp-3">{displayBio}</p>
+          <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-center text-transparent bg-gradient-to-r from-pink-400 to-purple-400 bg-clip-text mb-1">{displayName || ' '}</h1>
+          <p className="text-pink-400 text-sm sm:text-base font-medium mb-2 sm:mb-3">{displayUsername}</p>
+          <p className="text-gray-300 text-sm sm:text-base text-center mb-4 sm:mb-6 line-clamp-3 leading-relaxed">{displayBio}</p>
           
-          <div className="flex justify-center space-x-4 sm:space-x-6 w-full mb-4 sm:mb-6">
+          <div className="flex justify-center space-x-6 sm:space-x-8 w-full mb-6 sm:mb-8 bg-gradient-to-r from-gray-800/50 to-gray-700/50 backdrop-blur-sm rounded-2xl p-4 border border-pink-500/20">
             <div className="text-center">
-              <div className="text-base sm:text-lg md:text-xl font-bold text-white">{displaySupporters}</div>
-              <div className="text-gray-400 text-[10px] sm:text-xs">Supporters</div>
+              <div className="text-lg sm:text-xl md:text-2xl font-bold text-white mb-1">{displaySupporters}</div>
+              <div className="text-pink-300 text-xs sm:text-sm font-medium">Supporters</div>
+            </div>
+            <div className="text-center border-x border-pink-500/20 px-6">
+              <div className="text-lg sm:text-xl md:text-2xl font-bold text-white mb-1">0</div>
+              <div className="text-pink-300 text-xs sm:text-sm font-medium">Posts</div>
             </div>
             <div className="text-center">
-              <div className="text-base sm:text-lg md:text-xl font-bold text-white">0</div>
-              <div className="text-gray-400 text-[10px] sm:text-xs">Posts</div>
-            </div>
-            <div className="text-center">
-              <div className="text-base sm:text-lg md:text-xl font-bold text-white">{typeof displayRating === 'number' ? displayRating : '-'}</div>
-              <div className="text-gray-400 text-[10px] sm:text-xs">Rating</div>
+              <div className="text-lg sm:text-xl md:text-2xl font-bold text-white mb-1">{typeof displayRating === 'number' ? displayRating : '-'}</div>
+              <div className="text-pink-300 text-xs sm:text-sm font-medium">Rating</div>
             </div>
           </div>
           
           {/* Show only one tier badge for this creator if subscribed AND following */}
           {currentTag && isFollowing ? (
-            <div className="supporter-badges flex flex-wrap justify-center gap-2 mb-4 sm:mb-6">
+            <div className="supporter-badges flex flex-wrap justify-center gap-3 mb-6 sm:mb-8">
               {(() => {
                 const tier = String(currentTag);
                 const t = tier.toLowerCase();
                 const badge = t.startsWith('p') ? 'P' : t.startsWith('g') ? 'G' : t.startsWith('s') ? 'S' : 'B';
                 const cls =
-                  badge === 'P' ? 'bg-purple-600 text-white' :
-                  badge === 'G' ? 'bg-yellow-500 text-yellow-900' :
-                  badge === 'S' ? 'bg-gray-400 text-gray-800' :
-                                  'bg-amber-700 text-amber-200';
+                  badge === 'P' ? 'bg-gradient-to-r from-purple-500 to-purple-600 text-white shadow-lg shadow-purple-500/30' :
+                  badge === 'G' ? 'bg-gradient-to-r from-yellow-400 to-yellow-500 text-black shadow-lg shadow-yellow-400/30' :
+                  badge === 'S' ? 'bg-gradient-to-r from-slate-400 to-slate-500 text-white shadow-lg shadow-slate-400/30' :
+                                  'bg-gradient-to-r from-amber-600 to-amber-700 text-white shadow-lg shadow-amber-500/30';
                 return (
-                  <div className={`supporter-badge ${cls} rounded-full p-1 shadow-sm`}>
-                    <span className="inline-block w-5 h-5 sm:w-6 sm:h-6 rounded-full flex items-center justify-center text-xs sm:text-sm font-bold">{badge}</span>
+                  <div className={`supporter-badge ${cls} rounded-full p-2 shadow-xl border border-white/20`}>
+                    <span className="inline-flex w-8 h-8 sm:w-10 sm:h-10 rounded-full items-center justify-center text-sm sm:text-base font-bold">{badge}</span>
                   </div>
                 );
               })()}
             </div>
           ) : (
-            <div className="mb-4 sm:mb-6" />
+            <div className="mb-6 sm:mb-8" />
           )}
           
           <button 
             onClick={() => setShowSupportModal(true)}
-            className="w-full bg-pink-500 hover:bg-pink-600 text-white font-semibold rounded-full px-4 sm:px-6 py-1.5 sm:py-2 flex items-center justify-center transition-colors mb-3 sm:mb-4 text-xs sm:text-sm"
+            className="w-full bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 text-white font-bold rounded-full px-6 sm:px-8 py-3 sm:py-4 flex items-center justify-center transition-all shadow-lg shadow-pink-500/25 hover:shadow-pink-500/40 hover:scale-105 mb-4 sm:mb-5 text-sm sm:text-base"
           >
-            <Heart className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+            <Heart className="h-4 w-4 sm:h-5 sm:w-5 mr-2 sm:mr-3" />
             {isFollowing && currentTag ? 'Upgrade Subscription' : 'Support Creator'}
           </button>
           {/* Follow/Unfollow control (independent of subscription tier) */}
@@ -619,40 +680,40 @@ const Creator: React.FC<CreatorProps> = ({ navigateTo }) => {
             !isFollowing ? (
               <button
                 onClick={onFollowNow}
-                className="w-full bg-[#1a1a1a] border border-pink-500 text-pink-500 hover:bg-pink-500/10 font-semibold rounded-full px-4 sm:px-6 py-1.5 sm:py-2 flex items-center justify-center transition-colors mb-3 sm:mb-4 text-xs sm:text-sm"
+                className="w-full bg-gray-900/50 backdrop-blur-sm border-2 border-pink-500 text-pink-400 hover:bg-pink-500/10 hover:text-pink-300 font-bold rounded-full px-6 sm:px-8 py-3 sm:py-4 flex items-center justify-center transition-all hover:scale-105 mb-4 sm:mb-5 text-sm sm:text-base shadow-lg"
               >
                 Follow
               </button>
             ) : (
               <button
                 onClick={onUnfollowNow}
-                className="w-full bg-[#1a1a1a] border border-gray-600 text-gray-300 hover:bg-gray-800 font-medium rounded-full px-4 sm:px-6 py-1.5 sm:py-2 flex items-center justify-center transition-colors mb-3 sm:mb-4 text-xs sm:text-sm"
+                className="w-full bg-gray-900/50 backdrop-blur-sm border-2 border-gray-600 text-gray-300 hover:bg-gray-800/50 hover:text-gray-200 font-medium rounded-full px-6 sm:px-8 py-3 sm:py-4 flex items-center justify-center transition-all hover:scale-105 mb-4 sm:mb-5 text-sm sm:text-base shadow-lg"
               >
                 Unfollow
               </button>
             )
           }
           
-          <div className="flex justify-center space-x-4 sm:space-x-8 w-full pt-3 sm:pt-4 border-t border-gray-800">
-            <button className="flex items-center text-gray-400 hover:text-pink-500 text-xs sm:text-sm">
-              <Settings className="h-4 w-4 sm:h-5 sm:w-5 mr-1 sm:mr-2" />
+          <div className="flex justify-center space-x-6 sm:space-x-8 w-full pt-4 sm:pt-6 border-t border-pink-500/20">
+            <button className="flex items-center text-gray-300 hover:text-pink-400 text-sm sm:text-base font-medium transition-all hover:scale-105">
+              <Settings className="h-5 w-5 sm:h-6 sm:w-6 mr-2 sm:mr-3" />
               <span>Settings</span>
             </button>
-            <button className="flex items-center text-gray-400 hover:text-pink-500 text-xs sm:text-sm">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 sm:h-5 sm:w-5 mr-1 sm:mr-2" viewBox="0 0 20 20" fill="currentColor">
+            <button className="flex items-center text-gray-300 hover:text-pink-400 text-sm sm:text-base font-medium transition-all hover:scale-105">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 sm:h-6 sm:w-6 mr-2 sm:mr-3" viewBox="0 0 20 20" fill="currentColor">
                 <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
               </svg>
               <span>Privacy</span>
             </button>
           </div>
           {/* Supporter View CTA at bottom */}
-          <div className="mt-3 sm:mt-4 w-full">
+          <div className="mt-4 sm:mt-6 w-full">
             <button
               onClick={handleSupporterView}
-              className="w-full py-2.5 px-4 rounded-lg bg-pink-500/10 hover:bg-pink-500/20 text-pink-500 flex items-center justify-center space-x-2 transition-colors"
+              className="w-full py-3 sm:py-4 px-6 rounded-xl bg-gradient-to-r from-pink-500/20 to-purple-500/20 hover:from-pink-500/30 hover:to-purple-500/30 text-pink-300 hover:text-white flex items-center justify-center space-x-3 transition-all hover:scale-105 border border-pink-500/30 backdrop-blur-sm shadow-lg font-medium"
             >
-              <Eye className="w-5 h-5" />
-              <span>Supporter View</span>
+              <Eye className="w-5 h-5 sm:w-6 sm:h-6" />
+              <span className="text-sm sm:text-base">Supporter View</span>
             </button>
           </div>
         </div>
@@ -660,107 +721,235 @@ const Creator: React.FC<CreatorProps> = ({ navigateTo }) => {
         {/* Right Content Section */}
         <div className="content-section md:w-2/3 p-3 sm:p-4">
 
-          {/* Posts Feed */}
-          <div className="posts-feed space-y-4 pb-16 sm:pb-20">
-            {isLoadingPosts ? (
-              <div className="text-center text-gray-400 py-6 sm:py-8 text-sm sm:text-base">Loading posts...</div>
-            ) : postError ? (
-              <div className="text-center text-red-400 py-6 sm:py-8 text-sm sm:text-base">{postError}</div>
-            ) : posts.length === 0 ? (
-              <div className="text-center text-gray-400 py-6 sm:py-8 text-sm sm:text-base">No posts yet</div>
-            ) : posts.map(post => {
+          {/* Icon Navigation Bar */}
+          <div className="mb-6 sm:mb-8 flex justify-center">
+            <div className="bg-gradient-to-r from-gray-900/80 to-gray-800/80 rounded-2xl p-3 backdrop-blur-md border border-gray-700/50 shadow-2xl w-full max-w-md">
+              <div className="flex space-x-4 justify-between">
+                <button
+                  className={`flex flex-col items-center justify-center w-20 h-16 rounded-xl transition-all duration-300 ${
+                    activeTab === 'Post' 
+                      ? 'bg-gradient-to-br from-pink-500 to-purple-600 text-white shadow-lg shadow-pink-500/30 scale-105' 
+                      : 'text-gray-400 hover:text-white hover:bg-gray-700/50 hover:scale-105'
+                  }`}
+                  onClick={() => setActiveTab('Post')}
+                  title="Posts"
+                >
+                  <FileText className="w-6 h-6 mb-1" />
+                  <span className="text-xs font-medium">Posts</span>
+                </button>
+                <button
+                  className={`flex flex-col items-center justify-center w-20 h-16 rounded-xl transition-all duration-300 ${
+                    activeTab === 'Picture' 
+                      ? 'bg-gradient-to-br from-pink-500 to-purple-600 text-white shadow-lg shadow-pink-500/30 scale-105' 
+                      : 'text-gray-400 hover:text-white hover:bg-gray-700/50 hover:scale-105'
+                  }`}
+                  onClick={() => setActiveTab('Picture')}
+                  title="Pictures"
+                >
+                  <Image className="w-6 h-6 mb-1" />
+                  <span className="text-xs font-medium">Photos</span>
+                </button>
+                <button
+                  className={`flex flex-col items-center justify-center w-20 h-16 rounded-xl transition-all duration-300 ${
+                    activeTab === 'Videos' 
+                      ? 'bg-gradient-to-br from-pink-500 to-purple-600 text-white shadow-lg shadow-pink-500/30 scale-105' 
+                      : 'text-gray-400 hover:text-white hover:bg-gray-700/50 hover:scale-105'
+                  }`}
+                  onClick={() => setActiveTab('Videos')}
+                  title="Videos"
+                >
+                  <Video className="w-6 h-6 mb-1" />
+                  <span className="text-xs font-medium">Videos</span>
+                </button>
+                <button
+                  className={`flex flex-col items-center justify-center w-20 h-16 rounded-xl transition-all duration-300 ${
+                    activeTab === 'Streaming' 
+                      ? 'bg-gradient-to-br from-pink-500 to-purple-600 text-white shadow-lg shadow-pink-500/30 scale-105' 
+                      : 'text-gray-400 hover:text-white hover:bg-gray-700/50 hover:scale-105'
+                  }`}
+                  onClick={() => setActiveTab('Streaming')}
+                  title="Live Streaming"
+                >
+                  <Radio className="w-6 h-6 mb-1" />
+                  <span className="text-xs font-medium">Live</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Tab Content */}
+          {activeTab === 'Post' && (
+            <div className="posts-feed space-y-6 pb-16 sm:pb-20">
+              {isLoadingPosts ? (
+                <div className="flex justify-center items-center py-8">
+                  <div className="relative">
+                    <div className="animate-spin rounded-full h-12 w-12 border-2 border-pink-500/20 border-t-pink-500" />
+                    <div className="absolute inset-0 rounded-full bg-gradient-to-r from-pink-500/20 to-purple-500/20 animate-pulse" />
+                  </div>
+                </div>
+              ) : postError ? (
+                <div className="p-4 bg-red-900/20 backdrop-blur-sm border border-red-500/30 text-red-300 rounded-xl shadow-xl text-center">{postError}</div>
+              ) : posts.length === 0 ? (
+                <div className="bg-gradient-to-br from-gray-900/80 to-gray-800/80 backdrop-blur-xl text-gray-100 rounded-2xl p-8 text-center border border-pink-500/20 shadow-2xl shadow-pink-500/10">
+                  <div className="w-20 h-20 mx-auto mb-6 bg-gradient-to-r from-pink-500/20 to-purple-500/20 rounded-full flex items-center justify-center">
+                    <svg className="w-10 h-10 text-pink-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                    </svg>
+                  </div>
+                  <h3 className="text-xl font-bold text-transparent bg-gradient-to-r from-pink-400 to-purple-400 bg-clip-text mb-2">No posts yet</h3>
+                  <p className="text-gray-300 mb-4">Start sharing exclusive content with your subscribers</p>
+                  <div className="inline-flex items-center text-sm text-pink-300">
+                    <span className="w-2 h-2 bg-pink-400 rounded-full mr-2 animate-pulse"></span>
+                    Create your first post
+                  </div>
+                </div>
+              ) : posts.map(post => {
               const locked = isPostLocked(post);
-              const tierBadge = currentTag || (post.visibility === 'supporters' ? 'Bronze' : null);
-              
+              const tierBadge = normalizeTier(post.category);
+              const media = Array.isArray(post.media_urls) ? post.media_urls : [];
+              const isVideo = (url: string) => /\.(mp4|webm|ogg)$/i.test(url);
+
               return (
-                <div key={post.id} className="post bg-[#121212] rounded-lg overflow-hidden shadow-md">
-                  <div className="p-4">
-                    {/* Post Header - User Info */}
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center">
-                        <div className="w-10 h-10 rounded-full bg-gray-800 flex items-center justify-center mr-3">
-                          <User className="h-6 w-6 text-gray-400" />
+                <article key={post.id} className="group bg-gradient-to-br from-gray-900/80 to-gray-800/80 backdrop-blur-xl rounded-2xl overflow-hidden border border-pink-500/20 shadow-2xl shadow-pink-500/10 hover:shadow-pink-500/20 transition-all hover:scale-[1.02] animate-in-up">
+                  <div className="p-4 sm:p-6">
+                    <div className="flex items-center">
+                      {post.author_avatar ? (
+                        <div className="relative">
+                          <img
+                            src={post.author_avatar}
+                            alt={post.author_name || authorName}
+                            className="w-12 h-12 sm:w-14 sm:h-14 rounded-full object-cover mr-3 sm:mr-4 ring-2 ring-pink-500/30 hover:ring-pink-400/50 transition-all"
+                            onError={(e) => { const t = e.currentTarget as HTMLImageElement; t.onerror = null; t.src = '/default-avatar.png'; }}
+                          />
+                          <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-gradient-to-r from-green-400 to-green-500 rounded-full border-2 border-gray-900"></div>
                         </div>
-                        <div>
-                          <div className="flex items-center">
-                            <span className="font-medium text-white text-sm">{post.author_name || authorName}</span>
-                            {tierBadge && (
-                              <span className={`ml-2 text-xs px-2 py-0.5 rounded ${tierBadge === 'Gold' ? 'bg-yellow-500 text-yellow-900' : tierBadge === 'Bronze' ? 'bg-amber-700 text-amber-200' : 'bg-gray-700 text-gray-300'}`}>
-                                {tierBadge}
-                              </span>
-                            )}
+                      ) : (
+                        <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-gradient-to-r from-gray-700 to-gray-800 mr-3 sm:mr-4 flex items-center justify-center text-gray-400 ring-2 ring-gray-600/30">
+                          <User className="w-6 h-6" />
+                        </div>
+                      )}
+                      <div className="flex-1">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <h3 className="font-bold text-base sm:text-lg text-white leading-tight hover:text-pink-300 transition-colors cursor-pointer">
+                              {post.author_name || authorName}
+                            </h3>
+                            <p className="text-xs text-gray-400 flex items-center font-medium">
+                              {formatTimeAgo(post.created_at)}
+                              <VisibilityIcon visibility={post.visibility} />
+                            </p>
                           </div>
-                          <div className="text-xs text-gray-400">{formatTimeAgo(post.created_at)}</div>
-                        </div>
-                      </div>
-                    </div>
-                    
-                    {/* Post Content */}
-                    {!locked ? (
-                      <div className="mt-3">
-                        {post.title && (
-                          <h3 className="font-medium text-white mb-2">{post.title}</h3>
-                        )}
-                        <p className="text-gray-300 text-sm">{post.content}</p>
-                        
-                        {/* Display media if available */}
-                        {post.media_urls && post.media_urls.length > 0 && (
-                          <div className="mt-3">
-                            {post.media_urls.slice(0, 1).map((url, index) => (
-                              <div key={index} className="relative rounded-md overflow-hidden">
-                                <img 
-                                  src={url} 
-                                  alt={`Media ${index + 1}`} 
-                                  className="w-full object-cover"
-                                  onError={(e) => {
-                                    const target = e.target as HTMLImageElement;
-                                    target.src = 'https://via.placeholder.com/600x400?text=Image+Not+Available';
-                                  }}
-                                />
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    ) : (
-                      <div className="mt-4 flex flex-col items-center justify-center py-8">
-                        <Lock className="h-6 w-6 text-gray-400 mb-2" />
-                        <p className="text-gray-300 text-sm mb-4">This content is locked</p>
-                        <button className="bg-pink-500 hover:bg-pink-600 text-white font-medium rounded-full px-6 py-2 transition-colors text-sm">
-                          Unlock Content
-                        </button>
-                      </div>
-                    )}
-                    
-                    {/* Post Footer - Interactions */}
-                    <div className="mt-4 flex items-center justify-between">
-                      <div className="flex items-center space-x-4">
-                        <button className="flex items-center text-gray-400 hover:text-pink-500">
-                          <Heart className="h-5 w-5 mr-1" />
-                          <span className="text-sm">0</span>
-                        </button>
-                        <button className="flex items-center text-gray-400 hover:text-blue-500">
-                          <MessageCircle className="h-5 w-5 mr-1" />
-                          <span className="text-sm">0</span>
-                        </button>
-                        <button className="flex items-center text-gray-400 hover:text-green-500">
-                          <Share2 className="h-5 w-5" />
-                        </button>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <div className="text-xs text-gray-500">
-                          {post.visibility === 'public' ? 'Public' : post.visibility === 'supporters' ? 'Supporters Only' : 'Private'}
-                        </div>
-                        <div className="text-xs px-2 py-0.5 rounded bg-gray-700 text-gray-300">
-                          {post.category}
+                          <span className={`text-xs px-3 py-1.5 rounded-full font-medium ${badgeClassForTier(tierBadge)}`}>
+                            {tierBadge}
+                          </span>
                         </div>
                       </div>
                     </div>
                   </div>
-                </div>
+
+                  {/* Content */}
+                  <div className="px-4 sm:px-6 pb-3 sm:pb-4">
+                    {!locked && post.content && (
+                      <p className="mb-3 text-sm sm:text-base leading-relaxed text-gray-200">{post.content}</p>
+                    )}
+                    {locked && (
+                      <div className="mb-3 rounded-xl border border-pink-500/30 bg-gradient-to-r from-pink-900/20 to-purple-900/20 backdrop-blur-sm p-4 text-center">
+                        <div className="flex items-center justify-center gap-2 text-pink-300">
+                          <Lock className="h-5 w-5" />
+                          <span className="text-sm font-medium">This post is locked. Subscribe to unlock exclusive content.</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Media + lock overlay */}
+                  {media.length > 0 && (
+                    <div className="relative w-full overflow-hidden rounded-2xl border border-pink-500/20 mx-4 sm:mx-6 mb-3 sm:mb-4 shadow-xl">
+                      {media.length === 1 ? (
+                        isVideo(media[0]) ? (
+                          <video src={media[0]} className={`w-full h-auto max-h-[400px] object-cover ${locked ? 'blur-xl pointer-events-none select-none' : ''}`} controls preload="metadata" />
+                        ) : (
+                          <img src={media[0]} alt="Post content" className={`w-full h-auto max-h-[400px] object-cover ${locked ? 'blur-xl pointer-events-none select-none' : ''}`} />
+                        )
+                      ) : (
+                        <div className={`grid gap-1 ${media.length === 2 ? 'grid-cols-2' : media.length >= 3 ? 'grid-cols-3' : 'grid-cols-1'}`}>
+                          {media.slice(0, 6).map((url, index) => (
+                            <div key={index} className="relative aspect-square overflow-hidden">
+                              {isVideo(url) ? (
+                                <video src={url} className={`w-full h-full object-cover ${locked ? 'blur-xl pointer-events-none select-none' : ''}`} preload="metadata" />
+                              ) : (
+                                <img src={url} alt={`Media ${index + 1}`} className={`w-full h-full object-cover ${locked ? 'blur-xl pointer-events-none select-none' : ''}`} />
+                              )}
+                              {index === 5 && media.length > 6 && (
+                                <div className="absolute inset-0 bg-black/50 flex items-center justify-center text-white font-bold text-xl">+{media.length - 6}</div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {locked && (
+                        <div className="absolute inset-0 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+                          <div className="text-center px-4">
+                            <div className="w-16 h-16 mx-auto mb-4 bg-gradient-to-r from-pink-500/20 to-purple-500/20 rounded-full flex items-center justify-center">
+                              <Lock className="h-8 w-8 text-pink-400" />
+                            </div>
+                            <h4 className="text-lg sm:text-xl font-bold text-white mb-2">Premium Content</h4>
+                            <p className="text-sm text-gray-200 mb-4">Subscribe to unlock exclusive content</p>
+                            <button className="bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 text-white font-medium px-6 sm:px-8 py-2.5 sm:py-3 text-sm rounded-full transition-all shadow-lg shadow-pink-500/25 hover:shadow-pink-500/40">Subscribe Now</button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Footer */}
+                  <div className="px-4 sm:px-6 pt-3 sm:pt-4 pb-4 flex items-center justify-between border-t border-pink-500/20 bg-gradient-to-r from-gray-900/50 to-gray-800/50">
+                    <div className="flex items-center space-x-6">
+                      <button className="flex items-center text-gray-300 hover:text-pink-400 transition-all hover:scale-105 group" aria-label="Like">
+                        <Heart className="h-5 w-5 sm:h-6 sm:w-6 mr-2 group-hover:fill-pink-400" />
+                        <span className="text-sm sm:text-base font-medium">0</span>
+                      </button>
+                      <button className="flex items-center text-gray-300 hover:text-blue-400 transition-all hover:scale-105 group" aria-label="Comment">
+                        <MessageCircle className="h-5 w-5 sm:h-6 sm:w-6 mr-2 group-hover:fill-blue-400" />
+                        <span className="text-sm sm:text-base font-medium">0</span>
+                      </button>
+                      <button className="flex items-center text-gray-300 hover:text-purple-400 transition-all hover:scale-105 group" aria-label="Share">
+                        <Share2 className="h-5 w-5 sm:h-6 sm:w-6 group-hover:scale-110" />
+                      </button>
+                    </div>
+                    <div className="flex items-center">
+                      <button className="text-gray-400 hover:text-pink-400 transition-colors">
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h.01M12 12h.01M19 12h.01M6 12a1 1 0 11-2 0 1 1 0 012 0zm7 0a1 1 0 11-2 0 1 1 0 012 0zm7 0a1 1 0 11-2 0 1 1 0 012 0z" />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                </article>
               );
-            })}
-          </div>
+              })}
+            </div>
+          )}
+
+          {activeTab === 'Picture' && (
+            <div className="pb-16 sm:pb-20 max-h-[calc(100vh-200px)] overflow-y-auto pr-2" style={{ scrollbarWidth: 'thin', scrollbarColor: '#ff3d6e #374151' }}>
+              <UserImageGallery userId={creatorContentUserId || undefined} />
+            </div>
+          )}
+
+          {activeTab === 'Videos' && (
+            <div className="text-center text-gray-400 py-6 sm:py-8 text-sm sm:text-base">
+              Videos coming soon.
+            </div>
+          )}
+
+          {activeTab === 'Streaming' && (
+            <div className="text-center text-gray-400 py-6 sm:py-8 text-sm sm:text-base">
+              Streaming coming soon.
+            </div>
+          )}
+
         </div>
       </div>
       
@@ -789,7 +978,7 @@ const Creator: React.FC<CreatorProps> = ({ navigateTo }) => {
                 onClick={() => setSelectedTier('Platinum')}
               >
                 <div className="supporter-badge bg-purple-600 text-white rounded-full p-0.5 sm:p-1 mr-2 sm:mr-3">
-                  <span className="inline-block w-6 h-6 sm:w-8 sm:h-8 rounded-full flex items-center justify-center text-xs sm:text-base font-bold">P</span>
+                  <span className="w-6 h-6 sm:w-8 sm:h-8 rounded-full items-center justify-center text-xs sm:text-base font-bold">P</span>
                 </div>
                 <div>
                   <div className="font-semibold text-white text-xs sm:text-base">Platinum Supporter</div>
@@ -802,7 +991,7 @@ const Creator: React.FC<CreatorProps> = ({ navigateTo }) => {
                 onClick={() => setSelectedTier('Gold')}
               >
                 <div className="supporter-badge bg-yellow-500 text-yellow-900 rounded-full p-0.5 sm:p-1 mr-2 sm:mr-3">
-                  <span className="inline-block w-6 h-6 sm:w-8 sm:h-8 rounded-full flex items-center justify-center text-xs sm:text-base font-bold">G</span>
+                  <span className="inline-flex w-6 h-6 sm:w-8 sm:h-8 rounded-full items-center justify-center text-xs sm:text-base font-bold">G</span>
                 </div>
                 <div>
                   <div className="font-semibold text-white text-xs sm:text-base">Gold Supporter</div>
@@ -815,7 +1004,7 @@ const Creator: React.FC<CreatorProps> = ({ navigateTo }) => {
                 onClick={() => setSelectedTier('Silver')}
               >
                 <div className="supporter-badge bg-gray-400 text-gray-800 rounded-full p-0.5 sm:p-1 mr-2 sm:mr-3">
-                  <span className="inline-block w-6 h-6 sm:w-8 sm:h-8 rounded-full flex items-center justify-center text-xs sm:text-base font-bold">S</span>
+                  <span className="inline-flex w-6 h-6 sm:w-8 sm:h-8 rounded-full items-center justify-center text-xs sm:text-base font-bold">S</span>
                 </div>
                 <div>
                   <div className="font-semibold text-white text-xs sm:text-base">Silver Supporter</div>
@@ -828,7 +1017,7 @@ const Creator: React.FC<CreatorProps> = ({ navigateTo }) => {
                 onClick={() => setSelectedTier('Bronze')}
               >
                 <div className="supporter-badge bg-amber-700 text-amber-200 rounded-full p-0.5 sm:p-1 mr-2 sm:mr-3">
-                  <span className="inline-block w-6 h-6 sm:w-8 sm:h-8 rounded-full flex items-center justify-center text-xs sm:text-base font-bold">B</span>
+                  <span className="inline-flex w-6 h-6 sm:w-8 sm:h-8 rounded-full items-center justify-center text-xs sm:text-base font-bold">B</span>
                 </div>
                 <div>
                   <div className="font-semibold text-white text-xs sm:text-base">Bronze Supporter</div>

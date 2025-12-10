@@ -5,6 +5,7 @@ import { useAuth } from '../AuthContext';
 import CreatorDashboard from '../creatorDashboard/CreatorDashboard';
 import UserPost from './userPost';
 import UserImageGallery from './userImageGallery';
+import { FileText, Image, Video, Radio } from 'lucide-react';
 
 type ProfileInfo = {
   email: string | null;
@@ -381,31 +382,59 @@ const UserProfile: React.FC<UserProfileProps> = ({ publicId }) => {
 
           {/* Right column: feed */}
           <main className="profile-feed">
-            {/* Navigation tabs */}
-            <div className="profile-nav">
-              <div 
-                className={`profile-nav-tab ${activeTab === 'Post' ? 'active' : ''}`}
-                onClick={() => setActiveTab('Post')}
-              >
-                Post
-              </div>
-              <div 
-                className={`profile-nav-tab ${activeTab === 'Picture' ? 'active' : ''}`}
-                onClick={() => setActiveTab('Picture')}
-              >
-                Picture
-              </div>
-              <div 
-                className={`profile-nav-tab ${activeTab === 'Videos' ? 'active' : ''}`}
-                onClick={() => setActiveTab('Videos')}
-              >
-                Videos
-              </div>
-              <div 
-                className={`profile-nav-tab ${activeTab === 'Streaming' ? 'active' : ''}`}
-                onClick={() => setActiveTab('Streaming')}
-              >
-                Streaming
+            {/* Icon Navigation Bar (copied style from creator page) */}
+            <div className="mb-4 sm:mb-6 flex justify-center">
+              <div className="bg-gradient-to-r from-gray-900/80 to-gray-800/80 rounded-2xl p-3 backdrop-blur-md border border-gray-700/50 shadow-2xl w-full max-w-md">
+                <div className="flex space-x-4 justify-between">
+                  <button
+                    className={`flex flex-col items-center justify-center w-20 h-16 rounded-xl transition-all duration-300 ${
+                      activeTab === 'Post'
+                        ? 'bg-gradient-to-br from-pink-500 to-purple-600 text-white shadow-lg shadow-pink-500/30 scale-105'
+                        : 'text-gray-400 hover:text-white hover:bg-gray-700/50 hover:scale-105'
+                    }`}
+                    onClick={() => setActiveTab('Post')}
+                    title="Posts"
+                  >
+                    <FileText className="w-6 h-6 mb-1" />
+                    <span className="text-xs font-medium">Posts</span>
+                  </button>
+                  <button
+                    className={`flex flex-col items-center justify-center w-20 h-16 rounded-xl transition-all duration-300 ${
+                      activeTab === 'Picture'
+                        ? 'bg-gradient-to-br from-pink-500 to-purple-600 text-white shadow-lg shadow-pink-500/30 scale-105'
+                        : 'text-gray-400 hover:text-white hover:bg-gray-700/50 hover:scale-105'
+                    }`}
+                    onClick={() => setActiveTab('Picture')}
+                    title="Pictures"
+                  >
+                    <Image className="w-6 h-6 mb-1" />
+                    <span className="text-xs font-medium">Photos</span>
+                  </button>
+                  <button
+                    className={`flex flex-col items-center justify-center w-20 h-16 rounded-xl transition-all duration-300 ${
+                      activeTab === 'Videos'
+                        ? 'bg-gradient-to-br from-pink-500 to-purple-600 text-white shadow-lg shadow-pink-500/30 scale-105'
+                        : 'text-gray-400 hover:text-white hover:bg-gray-700/50 hover:scale-105'
+                    }`}
+                    onClick={() => setActiveTab('Videos')}
+                    title="Videos"
+                  >
+                    <Video className="w-6 h-6 mb-1" />
+                    <span className="text-xs font-medium">Videos</span>
+                  </button>
+                  <button
+                    className={`flex flex-col items-center justify-center w-20 h-16 rounded-xl transition-all duration-300 ${
+                      activeTab === 'Streaming'
+                        ? 'bg-gradient-to-br from-pink-500 to-purple-600 text-white shadow-lg shadow-pink-500/30 scale-105'
+                        : 'text-gray-400 hover:text-white hover:bg-gray-700/50 hover:scale-105'
+                    }`}
+                    onClick={() => setActiveTab('Streaming')}
+                    title="Live Streaming"
+                  >
+                    <Radio className="w-6 h-6 mb-1" />
+                    <span className="text-xs font-medium">Live</span>
+                  </button>
+                </div>
               </div>
             </div>
             

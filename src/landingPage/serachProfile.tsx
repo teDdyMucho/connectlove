@@ -248,11 +248,11 @@ const SearchProfile: React.FC<SearchProfileProps> = ({ navigateTo }) => {
   };
 
   return (
-    <div className="search-profile bg-background text-gray-900 min-h-screen flex flex-col relative pt-14 sm:pt-16 overflow-x-hidden">
+    <div className="search-profile bg-gradient-to-br from-gray-900 via-black to-gray-900 text-gray-100 min-h-screen flex flex-col relative pt-14 sm:pt-16 overflow-x-hidden">
       {/* Header with Search */}
-      <header className="bg-white shadow-sm py-3 sm:py-4 px-2 sm:px-4 fixed top-0 left-0 right-0 z-50 safe-area-inset-top">
+      <header className="bg-black/20 backdrop-blur-xl border-b border-pink-500/20 shadow-lg shadow-pink-500/10 py-3 sm:py-4 px-2 sm:px-4 fixed top-0 left-0 right-0 z-50 safe-area-inset-top">
         <div className="max-w-6xl mx-auto flex items-center justify-between">
-          <div className="text-primary font-bold text-lg sm:text-xl">ConnectLove</div>
+          <div className="text-transparent bg-gradient-to-r from-pink-400 to-purple-600 bg-clip-text font-bold text-lg sm:text-xl tracking-tight">ConnectLove</div>
           <div className="flex items-center space-x-2 sm:space-x-4 w-full max-w-xs sm:max-w-md mx-2 sm:mx-4">
             <form onSubmit={handleSearch} className="relative w-full"
               onFocus={() => {
@@ -266,14 +266,14 @@ const SearchProfile: React.FC<SearchProfileProps> = ({ navigateTo }) => {
             >
               <input
                 type="text"
-                placeholder="Search profiles..."
-                className="bg-gray-100 rounded-full py-1.5 sm:py-2 px-3 sm:px-4 pr-8 sm:pr-10 w-full focus:outline-none focus:ring-2 focus:ring-primary text-xs sm:text-sm"
+                placeholder="Search creators..."
+                className="bg-gray-800/50 backdrop-blur-sm rounded-full py-1.5 sm:py-2 px-3 sm:px-4 pr-8 sm:pr-10 w-full focus:outline-none focus:ring-2 focus:ring-pink-500/50 border border-gray-700/50 focus:border-pink-500/60 text-xs sm:text-sm text-gray-100 placeholder-gray-400 transition-all"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
               <button 
                 type="submit" 
-                className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-primary"
+                className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-pink-400 transition-colors"
                 disabled={isSearching}
               >
                 <Search className="h-4 w-4 sm:h-5 sm:w-5" />
@@ -281,12 +281,12 @@ const SearchProfile: React.FC<SearchProfileProps> = ({ navigateTo }) => {
 
               {/* Live suggestions dropdown */}
               {showDropdown && suggestions.length > 0 && (
-                <div className="absolute z-50 mt-1 sm:mt-2 left-0 right-0 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 sm:max-h-64 overflow-y-auto">
+                <div className="absolute z-50 mt-1 sm:mt-2 left-0 right-0 bg-gray-900/95 backdrop-blur-xl border border-pink-500/20 rounded-xl shadow-2xl shadow-pink-500/10 max-h-48 sm:max-h-64 overflow-y-auto">
                   {suggestions.map((s) => (
                     <button
                       key={s.id}
                       type="button"
-                      className="w-full text-left px-2 sm:px-3 py-1.5 sm:py-2 hover:bg-gray-50 flex items-center gap-2 sm:gap-3"
+                      className="w-full text-left px-2 sm:px-3 py-1.5 sm:py-2 hover:bg-gradient-to-r hover:from-pink-500/10 hover:to-purple-500/10 flex items-center gap-2 sm:gap-3 transition-all hover:text-pink-300"
                       onMouseDown={(e) => e.preventDefault()}
                       onClick={() => handleSelectSuggestion(s)}
                     >
@@ -296,8 +296,8 @@ const SearchProfile: React.FC<SearchProfileProps> = ({ navigateTo }) => {
                         className="w-6 h-6 sm:w-8 sm:h-8 rounded-full object-cover"
                       />
                       <div>
-                        <div className="text-xs sm:text-sm font-medium text-gray-900">{s.name}</div>
-                        <div className="text-[10px] sm:text-xs text-gray-500">@{s.id}{s.category ? ` • ${s.category}` : ''}</div>
+                        <div className="text-xs sm:text-sm font-medium text-gray-100">{s.name}</div>
+                        <div className="text-[10px] sm:text-xs text-gray-400">@{s.id}{s.category ? ` • ${s.category}` : ''}</div>
                       </div>
                     </button>
                   ))}
@@ -308,7 +308,7 @@ const SearchProfile: React.FC<SearchProfileProps> = ({ navigateTo }) => {
           <div className="flex items-center">
             <button 
               onClick={() => navigateTo('main')} 
-              className="text-primary hover:text-primary-dark text-xs sm:text-sm whitespace-nowrap px-1 sm:px-2"
+              className="text-pink-400 hover:text-pink-300 text-xs sm:text-sm whitespace-nowrap px-1 sm:px-2 transition-colors font-medium"
             >
               <span className="hidden xs:inline">Back to Home</span>
               <span className="xs:hidden">Back</span>
@@ -322,14 +322,14 @@ const SearchProfile: React.FC<SearchProfileProps> = ({ navigateTo }) => {
         {/* Search Status */}
         {isSearching && (
           <div className="text-center py-6 sm:py-8">
-            <div className="animate-spin rounded-full h-8 w-8 sm:h-12 sm:w-12 border-t-2 border-b-2 border-primary mx-auto"></div>
+            <div className="animate-spin rounded-full h-8 w-8 sm:h-12 sm:w-12 border-t-2 border-b-2 border-pink-500 mx-auto"></div>
             <p className="mt-3 sm:mt-4 text-sm sm:text-base text-gray-600">Searching profiles...</p>
           </div>
         )}
 
         {/* Error Message */}
         {error && !isSearching && (
-          <div className="bg-red-50 border border-red-200 text-red-700 px-3 sm:px-4 py-2 sm:py-3 rounded-md mb-4 sm:mb-6 text-xs sm:text-sm">
+          <div className="bg-red-900/20 backdrop-blur-sm border border-red-500/30 text-red-300 px-3 sm:px-4 py-2 sm:py-3 rounded-xl mb-4 sm:mb-6 text-xs sm:text-sm">
             {error}
           </div>
         )}
@@ -337,42 +337,45 @@ const SearchProfile: React.FC<SearchProfileProps> = ({ navigateTo }) => {
         {/* Search Results */}
         {!isSearching && searchResults.length > 0 && (
           <div className="space-y-4 sm:space-y-6">
-            <h2 className="text-lg sm:text-xl font-semibold mb-3 sm:mb-4">Search Results</h2>
+            <h2 className="text-lg sm:text-xl font-bold text-transparent bg-gradient-to-r from-pink-400 to-purple-400 bg-clip-text mb-3 sm:mb-4">Search Results</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 md:gap-6">
               {searchResults.map((profile) => (
-                <div key={profile.id} className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow">
-                  <div className="p-3 sm:p-4">
-                    <div className="flex items-center">
-                      <img 
-                        src={profile.avatar || 'https://i.pravatar.cc/150'} 
-                        alt={profile.name} 
-                        className="w-12 h-12 sm:w-16 sm:h-16 rounded-full object-cover mr-3 sm:mr-4"
-                      />
-                      <div className="min-w-0">
-                        <h3 className="font-medium text-base sm:text-lg truncate">{profile.name}</h3>
+                <div key={profile.id} className="bg-gradient-to-br from-gray-900/80 to-gray-800/80 backdrop-blur-xl rounded-2xl border border-pink-500/20 overflow-hidden shadow-xl shadow-pink-500/10 hover:shadow-pink-500/20 transition-all hover:scale-105 group">
+                  <div className="p-4 sm:p-6">
+                    <div className="flex items-center mb-4">
+                      <div className="relative">
+                        <img 
+                          src={profile.avatar || 'https://i.pravatar.cc/150'} 
+                          alt={profile.name} 
+                          className="w-16 h-16 sm:w-20 sm:h-20 rounded-full object-cover ring-2 ring-pink-500/30 group-hover:ring-pink-400/50 transition-all"
+                        />
+                        <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-gradient-to-r from-green-400 to-green-500 rounded-full border-2 border-gray-900"></div>
+                      </div>
+                      <div className="ml-4 flex-1 min-w-0">
+                        <h3 className="font-bold text-lg sm:text-xl truncate text-white group-hover:text-pink-300 transition-colors">{profile.name}</h3>
                         {profile.category && (
-                          <p className="text-xs sm:text-sm text-gray-600 truncate">{profile.category}</p>
+                          <p className="text-sm text-pink-300 truncate font-medium">{profile.category}</p>
                         )}
                         {profile.rating && (
-                          <div className="flex items-center text-yellow-400">
-                            <span className="text-xs mr-0.5 sm:mr-1">★</span>
-                            <span className="text-xs">{profile.rating}</span>
+                          <div className="flex items-center text-yellow-400 mt-1">
+                            <span className="text-sm mr-1">★</span>
+                            <span className="text-sm font-medium">{profile.rating}</span>
                           </div>
                         )}
                       </div>
                     </div>
                     
                     {profile.bio && (
-                      <p className="mt-2 sm:mt-3 text-xs sm:text-sm text-gray-700 line-clamp-2">{profile.bio}</p>
+                      <p className="mb-3 text-sm text-gray-300 line-clamp-2">{profile.bio}</p>
                     )}
                     
                     {profile.supporters && (
-                      <p className="mt-1 sm:mt-2 text-[10px] sm:text-xs text-gray-500">{profile.supporters} supporters</p>
+                      <p className="mb-4 text-xs text-gray-400 font-medium">{profile.supporters} subscribers</p>
                     )}
                     
-                    <div className="mt-3 sm:mt-4 pt-2 sm:pt-3 border-t border-gray-100 flex justify-between">
+                    <div className="border-t border-pink-500/20 pt-4">
                       <button
-                        className="text-primary hover:text-primary-dark text-xs sm:text-sm font-medium"
+                        className="w-full py-3 bg-gradient-to-r from-pink-500/20 to-purple-500/20 hover:from-pink-500/30 hover:to-purple-500/30 text-pink-300 hover:text-white transition-all font-medium rounded-xl text-sm"
                         onClick={() => {
                           // If the clicked profile is the logged-in user, go to own profile
                           let isSelf = false;
@@ -408,7 +411,7 @@ const SearchProfile: React.FC<SearchProfileProps> = ({ navigateTo }) => {
                           navigateTo('creator');
                         }}
                       >
-                        View Profile
+                        Subscribe Now
                       </button>
                     </div>
                   </div>
@@ -421,9 +424,12 @@ const SearchProfile: React.FC<SearchProfileProps> = ({ navigateTo }) => {
         {/* No Search Performed Yet */}
         {!isSearching && searchResults.length === 0 && !error && (
           <div className="text-center py-8 sm:py-12">
-            <Search className="h-12 w-12 sm:h-16 sm:w-16 mx-auto text-gray-300" />
-            <p className="mt-3 sm:mt-4 text-sm sm:text-base text-gray-600">Search for profiles to connect with</p>
-            <p className="text-xs sm:text-sm text-gray-500">Enter a name, location, or interest</p>
+            <div className="w-20 h-20 mx-auto mb-6 bg-gradient-to-r from-pink-500/20 to-purple-500/20 rounded-full flex items-center justify-center">
+              <Search className="h-10 w-10 text-pink-400" />
+            </div>
+            <h3 className="text-xl font-bold text-transparent bg-gradient-to-r from-pink-400 to-purple-400 bg-clip-text mb-2">Discover Amazing Creators</h3>
+            <p className="text-gray-300 mb-1">Search for creators to connect with</p>
+            <p className="text-sm text-gray-400">Enter a name, category, or interest</p>
           </div>
         )}
       </main>

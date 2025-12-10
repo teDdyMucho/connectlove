@@ -3,6 +3,25 @@ import { supabase } from '../../lib/supabaseClient';
 import { Heart, MessageSquare, Share2, Lock, Globe, Users, User } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 
+// Tier helpers to match Feed UI
+type Tier = 'Public' | 'Bronze' | 'Silver' | 'Gold' | 'Platinum';
+const normalizeTier = (v?: string | null): Tier => {
+  if (!v) return 'Public';
+  const t = String(v).trim();
+  if (['Bronze', 'Silver', 'Gold', 'Platinum'].includes(t)) return t as Tier;
+  return 'Public';
+};
+const badgeClassForTier = (tier?: string | null) => {
+  const t = normalizeTier(tier);
+  switch (t) {
+    case 'Bronze': return 'bg-amber-700 text-amber-100';
+    case 'Silver': return 'bg-slate-400 text-slate-900';
+    case 'Gold': return 'bg-yellow-500 text-yellow-900';
+    case 'Platinum': return 'bg-blue-600 text-white';
+    default: return 'bg-green-600 text-white';
+  }
+};
+
 // Define types for post data
 type PostWithMedia = {
   id: string;
@@ -23,18 +42,13 @@ type UserPostProps = {
   userId?: string; // Optional: If provided, fetch posts for this specific user
 };
 
-// Component to display visibility icon based on post visibility
-const VisibilityIcon: React.FC<{ visibility: string }> = ({ visibility }) => {
-  switch (visibility) {
-    case 'public':
-      return <Globe size={16} className="text-gray-500" aria-label="Public" />;
-    case 'friends':
-      return <Users size={16} className="text-gray-500" aria-label="Friends Only" />;
-    case 'private':
-      return <User size={16} className="text-gray-500" aria-label="Only Me" />;
-    default:
-      return <Lock size={16} className="text-gray-500" aria-label="Private" />;
-  }
+// Visibility icon beside timestamp
+const VisibilityIcon: React.FC<{ visibility?: string | null }> = ({ visibility }) => {
+  const v = (visibility || 'public').toLowerCase();
+  const cls = 'inline-block align-middle ml-2 text-gray-300';
+  if (v === 'private' || v === 'only me') return <User className={`h-3.5 w-3.5 ${cls}`} />;
+  if (v === 'friends' || v === 'supporters' || v === 'friend') return <Users className={`h-3.5 w-3.5 ${cls}`} />;
+  return <Globe className={`h-3.5 w-3.5 ${cls}`} />; // public/global
 };
 
 const UserPost: React.FC<UserPostProps> = ({ userId }) => {
@@ -310,138 +324,125 @@ const UserPost: React.FC<UserPostProps> = ({ userId }) => {
   }
 
   return (
-    <div className="space-y-4 sm:space-y-6 pr-1 pb-4">
-      {posts.map((post, idx) => (
-        <article
-          key={post.id}
-          className="group bg-slate-900 text-gray-100 rounded-lg sm:rounded-xl overflow-hidden border border-slate-700 shadow-sm hover:shadow-md transition-shadow duration-200"
-          style={{ animationDelay: `${idx * 60}ms` }}
-        >
-          {/* Post Header */}
-          <div className="p-3 sm:p-4 flex items-center">
-            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-gray-200 mr-2 sm:mr-3 overflow-hidden">
-              <img 
-                src={localStorage.getItem('avatar_url') || 'https://i.pravatar.cc/150'} 
-                alt="User avatar"
-                className="w-full h-full object-cover"
-                onError={(e) => {
-                  (e.target as HTMLImageElement).src = 'https://i.pravatar.cc/150';
-                }}
-              />
-            </div>
-            <div className="flex-1">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <h3 className="font-medium text-sm sm:text-base text-gray-100">{userId && userId !== localStorage.getItem('public_id')
-                    ? localStorage.getItem('viewing_full_name') || localStorage.getItem('viewing_username') || 'User'
-                    : localStorage.getItem('full_name') || localStorage.getItem('username') || 'Anonymous'}</h3>
-                  {post.category && (
-                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] sm:text-xs bg-primary/10 text-primary border border-primary/20">
-                      {post.category}
-                    </span>
-                  )}
-                </div>
-                <span className="text-xs text-gray-400">{formatTimeAgo(post.created_at)}</span>
-              </div>
-              <div className="text-xs text-gray-500 flex items-center">
-                {post.visibility && (
-                  <VisibilityIcon visibility={post.visibility} />
-                )}
-              </div>
-            </div>
-          </div>
-          
-          {/* Post Content */}
-          <div className="px-3 sm:px-4 pb-2 sm:pb-3">
-            {post.title && (
-              <h3 className="font-medium text-base sm:text-lg mb-2">{post.title}</h3>
-            )}
-            <p className="text-sm sm:text-base leading-relaxed text-gray-200">{post.content}</p>
-          </div>
-          
-          {/* Post Media */}
-          {post.has_media && post.media_urls && post.media_urls.length > 0 && (
-            <div className="relative rounded-xl ring-1 ring-slate-700 mx-3 sm:mx-4 mb-2 sm:mb-3 overflow-hidden">
-              {post.media_urls.length === 1 ? (
-                <>
-                  <img 
-                    src={post.media_urls[0]} 
-                    alt={`Media for ${post.title || 'post'}`}
-                    className={`${post.visibility !== 'public' ? 'blur-xl pointer-events-none select-none' : 'transition-transform duration-300 group-hover:scale-[1.02]'} w-full h-60 sm:h-80 object-cover`}
-                    onError={(e) => {
-                      (e.target as HTMLImageElement).style.display = 'none';
-                    }}
-                    loading="lazy"
+    <div className="space-y-4 pb-16 sm:pb-20">
+      {posts.map((post) => {
+        const locked = post.visibility !== 'public';
+        const tierBadge = normalizeTier(post.category);
+        const media = Array.isArray(post.media_urls) ? post.media_urls : [];
+        const isVideo = (url: string) => /\.(mp4|webm|ogg)$/i.test(url);
+        const authorName = userId && userId !== localStorage.getItem('public_id')
+          ? localStorage.getItem('viewing_full_name') || localStorage.getItem('viewing_username') || 'User'
+          : localStorage.getItem('full_name') || localStorage.getItem('username') || 'Anonymous';
+
+        return (
+          <article key={post.id} className="group bg-[#121212] rounded-lg overflow-hidden border border-gray-800 shadow-sm">
+            <div className="p-3 sm:p-4">
+              <div className="flex items-center">
+                {localStorage.getItem('avatar_url') ? (
+                  <img
+                    src={localStorage.getItem('avatar_url') as string}
+                    alt={authorName}
+                    className="w-8 h-8 sm:w-10 sm:h-10 rounded-full object-cover mr-2 sm:mr-3"
+                    onError={(e) => { const t = e.currentTarget; t.onerror = null; t.src = '/default-avatar.png'; }}
                   />
-                  {post.visibility !== 'public' && (
-                    <div className="absolute inset-0 flex items-center justify-center bg-black/40">
-                      <div className="text-center px-4">
-                        <Lock className="h-8 w-8 sm:h-12 sm:w-12 mx-auto mb-1 sm:mb-2 text-white" />
-                        <h4 className="text-base sm:text-lg font-medium text-white mb-1">Content Locked</h4>
-                        <p className="text-xs sm:text-sm text-gray-200 mb-3 sm:mb-4">Support this creator to unlock</p>
-                        <button className="bg-primary hover:bg-primary-dark text-gray-900 font-medium px-4 sm:px-6 py-1.5 sm:py-2 text-sm rounded-full transition-all hover:shadow-[0_8px_26px_rgba(255,90,136,0.35)]">Support</button>
-                      </div>
-                    </div>
-                  )}
-                </>
-              ) : (
-                <div className="relative">
-                  <div className="grid grid-cols-2 gap-1">
-                    {post.media_urls.slice(0, 4).map((url, index) => (
-                      <img 
-                        key={`${post.id}-media-${index}`}
-                        src={url} 
-                        alt={`Media ${index + 1} for ${post.title || 'post'}`}
-                        className={`w-full h-40 object-cover ${post.visibility !== 'public' ? 'blur-xl pointer-events-none select-none' : ''}`}
-                        onError={(e) => {
-                          (e.target as HTMLImageElement).style.display = 'none';
-                        }}
-                        loading="lazy"
-                      />
-                    ))}
+                ) : (
+                  <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-gray-800 mr-2 sm:mr-3 flex items-center justify-center text-gray-400">
+                    <User className="w-5 h-5" />
                   </div>
-                  {post.media_urls.length > 4 && (
-                    <div className="absolute bottom-2 right-2 bg-black/70 text-white text-xs px-2 py-1 rounded">
-                      +{post.media_urls.length - 4} more
+                )}
+                <div className="flex-1">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="font-medium text-sm sm:text-base text-white leading-tight">
+                        {authorName}
+                      </h3>
+                      <p className="text-xs text-gray-400 flex items-center">
+                        {formatTimeAgo(post.created_at)}
+                        <VisibilityIcon visibility={post.visibility} />
+                      </p>
                     </div>
-                  )}
-                  {post.visibility !== 'public' && (
-                    <div className="absolute inset-0 flex items-center justify-center bg-black/40">
-                      <div className="text-center px-4">
-                        <Lock className="h-8 w-8 sm:h-12 sm:w-12 mx-auto mb-1 sm:mb-2 text-white" />
-                        <h4 className="text-base sm:text-lg font-medium text-white mb-1">Content Locked</h4>
-                        <p className="text-xs sm:text-sm text-gray-200 mb-3 sm:mb-4">Support this creator to unlock</p>
-                        <button className="bg-primary hover:bg-primary-dark text-gray-900 font-medium px-4 sm:px-6 py-1.5 sm:py-2 text-sm rounded-full transition-all hover:shadow-[0_8px_26px_rgba(255,90,136,0.35)]">Support</button>
-                      </div>
-                    </div>
-                  )}
+                    <span className={`text-xs px-2 py-0.5 rounded-md ${badgeClassForTier(tierBadge)}`}>
+                      {tierBadge}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Content */}
+            <div className="px-3 sm:px-4 pb-2 sm:pb-3">
+              {!locked && post.content && (
+                <p className="mb-2 text-sm sm:text-base leading-relaxed text-gray-200">{post.content}</p>
+              )}
+              {locked && (
+                <div className="mb-2 rounded-md border border-gray-700 bg-black/40 p-3 text-center">
+                  <div className="flex items-center justify-center gap-2 text-gray-200">
+                    <Lock className="h-4 w-4" />
+                    <span className="text-sm">This post is locked. Subscribe to unlock.</span>
+                  </div>
                 </div>
               )}
             </div>
-          )}
-          
-          {/* Post Actions */}
-          <div className="px-2 sm:px-4 py-2 sm:py-3 flex items-center border-t border-slate-700 bg-slate-900/80">
-            <button className="flex items-center text-gray-300 hover:text-primary mr-3 sm:mr-6 transition-colors">
-              <Heart className="h-4 w-4 sm:h-5 sm:w-5 mr-1" />
-              <span className="text-xs sm:text-sm">{post.likes_count || 0}</span>
-            </button>
-            <button className="flex items-center text-gray-300 hover:text-primary mr-3 sm:mr-6 transition-colors">
-              <MessageSquare className="h-4 w-4 sm:h-5 sm:w-5 mr-1" />
-              <span className="text-xs sm:text-sm">{post.comments_count || 0}</span>
-            </button>
-            <button className="flex items-center text-gray-300 hover:text-primary transition-colors">
-              <Share2 className="h-4 w-4 sm:h-5 sm:w-5 mr-1" />
-              <span className="text-xs sm:text-sm">Share</span>
-            </button>
-            {post.visibility !== 'public' && (
-              <span className="ml-auto text-xs text-primary font-medium flex items-center">
-                <Lock className="h-3 w-3" />
-              </span>
+
+            {/* Media + lock overlay */}
+            {media.length > 0 && (
+              <div className="relative w-full overflow-hidden rounded-xl border border-gray-800 mx-3 sm:mx-4 mb-2 sm:mb-3">
+                {media.length === 1 ? (
+                  isVideo(media[0]) ? (
+                    <video src={media[0]} className={`w-full h-auto max-h-[400px] object-cover ${locked ? 'blur-xl pointer-events-none select-none' : ''}`} controls preload="metadata" />
+                  ) : (
+                    <img src={media[0]} alt="Post content" className={`w-full h-auto max-h-[400px] object-cover ${locked ? 'blur-xl pointer-events-none select-none' : ''}`} />
+                  )
+                ) : (
+                  <div className={`grid gap-1 ${media.length === 2 ? 'grid-cols-2' : media.length >= 3 ? 'grid-cols-3' : 'grid-cols-1'}`}>
+                    {media.slice(0, 6).map((url, index) => (
+                      <div key={index} className="relative aspect-square overflow-hidden">
+                        {isVideo(url) ? (
+                          <video src={url} className={`w-full h-full object-cover ${locked ? 'blur-xl pointer-events-none select-none' : ''}`} preload="metadata" />
+                        ) : (
+                          <img src={url} alt={`Media ${index + 1}`} className={`w-full h-full object-cover ${locked ? 'blur-xl pointer-events-none select-none' : ''}`} />
+                        )}
+                        {index === 5 && media.length > 6 && (
+                          <div className="absolute inset-0 bg-black/50 flex items-center justify-center text-white font-bold text-xl">+{media.length - 6}</div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {locked && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/40">
+                    <div className="text-center px-4">
+                      <Lock className="h-8 w-8 sm:h-12 sm:w-12 mx-auto mb-1 sm:mb-2 text-white" />
+                      <h4 className="text-base sm:text-lg font-medium text-white mb-1">Content Locked</h4>
+                      <p className="text-xs sm:text-sm text-gray-200 mb-3 sm:mb-4">Support this creator to unlock</p>
+                      <button className="bg-pink-500 hover:bg-pink-600 text-white font-medium px-4 sm:px-6 py-1.5 sm:py-2 text-sm rounded-full transition-all">Support</button>
+                    </div>
+                  </div>
+                )}
+              </div>
             )}
-          </div>
-        </article>
-      ))}
+
+            {/* Footer */}
+            <div className="px-3 sm:px-4 pt-2 sm:pt-3 pb-3 flex items-center justify-between bg-[#121212]">
+              <div className="flex items-center space-x-4">
+                <button className="flex items-center text-gray-300 hover:text-pink-500 transition-colors" aria-label="Like">
+                  <Heart className="h-4 w-4 sm:h-5 sm:w-5 mr-1" />
+                  <span className="text-xs sm:text-sm">{post.likes_count || 0}</span>
+                </button>
+                <button className="flex items-center text-gray-300 hover:text-pink-500 transition-colors" aria-label="Comment">
+                  <MessageSquare className="h-4 w-4 sm:h-5 sm:w-5 mr-1" />
+                  <span className="text-xs sm:text-sm">{post.comments_count || 0}</span>
+                </button>
+                <button className="flex items-center text-gray-300 hover:text-pink-500 transition-colors" aria-label="Share">
+                  <Share2 className="h-4 w-4 sm:h-5 sm:w-5" />
+                </button>
+              </div>
+              <div />
+            </div>
+          </article>
+        );
+      })}
     </div>
   );
 };

@@ -62,6 +62,7 @@ const Messages: React.FC<MessagesProps> = ({ navigateTo }) => {
   const [currentUserName, setCurrentUserName] = useState<string>('Current User');
   const [newMessage, setNewMessage] = useState<string>('');
   const [uploadingImage, setUploadingImage] = useState<boolean>(false);
+  const [isOtherCreator, setIsOtherCreator] = useState<boolean>(false);
 
   // Anchor for auto-scroll to latest message
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
@@ -80,6 +81,218 @@ const Messages: React.FC<MessagesProps> = ({ navigateTo }) => {
       return false;
     }
   };
+
+  // Check if message text contains interactive JSON structure
+  const isInteractiveMessage = (txt: string): boolean => {
+    if (!txt) return false;
+    try {
+      const parsed = JSON.parse(txt);
+      return !!(parsed.mainQuestion && parsed.followUp && parsed.questions && Array.isArray(parsed.questions));
+    } catch {
+      return false;
+    }
+  };
+
+  // Parse interactive message JSON
+  const parseInteractiveMessage = (txt: string) => {
+    try {
+      return JSON.parse(txt);
+    } catch {
+      return null;
+    }
+  };
+
+  // Interactive message question type
+  interface InteractiveQuestion {
+    question: string;
+    points: number;
+    value: string;
+    replies?: string[];
+  }
+
+  // Interactive reply state
+  const [activeReply, setActiveReply] = useState<{question: InteractiveQuestion; messageId: string} | null>(null);
+  const [replyText, setReplyText] = useState<string>('');
+  const [sendingReplyMessageId, setSendingReplyMessageId] = useState<string | null>(null);
+  const [sentReplies, setSentReplies] = useState<Set<string>>(() => {
+    try {
+      const stored = localStorage.getItem('sentReplies');
+      return stored ? new Set(JSON.parse(stored)) : new Set();
+    } catch {
+      return new Set();
+    }
+  });
+
+  // Action button inline questions state
+  const [showInlineQuestions, setShowInlineQuestions] = useState<string | null>(null);
+
+  // Question type definition
+  interface ActionQuestion {
+    id: string;
+    question: string;
+    points?: number;
+  }
+
+  // Questions for each action type
+  const actionQuestions: { [key: string]: ActionQuestion[] } = {
+      gift: [
+      { id: 'gift_1', question: 'Want quick points? Send a small gift to claim them.', points: 40 },
+      { id: 'gift_2', question: 'You can earn more points—send a surprise gift.', points: 80 },
+      { id: 'gift_3', question: 'Earn big points by sending a romantic gift.', points: 120 }
+    ],
+    love: [
+      { id: 'love_1', question: 'Want points? Show a little love to get them.', points: 30 },
+      { id: 'love_2', question: 'Send a heart and earn some easy points.', points: 60 },
+      { id: 'love_3', question: 'Make me feel special and earn big points while doing it.', points: 90 }
+    ],
+    tip: [
+      { id: 'tip_1', question: 'Earn points instantly—send a small tip.', points: 25 },
+      { id: 'tip_2', question: 'Want more points? Drop a generous tip.', points: 75 },
+      { id: 'tip_3', question: 'Big points available—send a big tip to claim them.', points: 150 }
+    ],
+    boost: [
+      { id: 'boost_1', question: 'Earn points by boosting my profile.', points: 60 },
+      { id: 'boost_2', question: 'Want higher points? Help push me trending.', points: 100 },
+      { id: 'boost_3', question: 'Get mega points—send me a mega boost.', points: 200 }
+    ],
+    drink: [
+      { id: 'drink_1', question: 'Grab quick points—buy me a coffee.', points: 50 },
+      { id: 'drink_2', question: 'Earn more points by getting me an energy drink.', points: 75 },
+      { id: 'drink_3', question: 'Want extra points? Treat me to a special drink.', points: 100 }
+    ]
+  };
+
+  // Handle interactive question click - show reply box
+  const handleInteractiveQuestion = useCallback((question: InteractiveQuestion, messageId: string, messageSender: string) => {
+    // Don't show reply box if already sent a reply for this message
+    if (sentReplies.has(messageId)) return;
+    
+    // Don't show reply box if sender is trying to reply to their own message
+    if (messageSender === 'user') return;
+    
+    setActiveReply({ question, messageId });
+    setReplyText('');
+  }, [sentReplies]);
+
+  // Handle sending the reply with webhook
+  const handleSendReply = useCallback(async () => {
+    try {
+      if (!activeReply || !activeConv?.otherUserId) {
+        console.warn('No active reply or conversation');
+        return;
+      }
+
+      const currentUserUuid = await resolveUserId(currentUserId);
+      if (!currentUserUuid) {
+        console.warn('Could not resolve current user ID');
+        return;
+      }
+
+      const payload = {
+        conversation_id: activeConversationId,
+        message_id: activeReply.messageId,
+        wallet_balance_user_id: activeConv.otherUserId,
+        sender_id: currentUserUuid,
+        receiver_id: activeConv.otherUserId,
+        question_value: activeReply.question.value,
+        question_points: activeReply.question.points,
+        question_text: replyText || activeReply.question.question
+      };
+
+      console.log('[Interactive Reply -> webhook] payload:', payload);
+      
+      const resp = await fetch('https://primary-production-6722.up.railway.app/webhook/reply-drink', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+        cache: 'no-store',
+        keepalive: true,
+      });
+      
+      const text = await resp.text().catch(() => '');
+      console.log('[Interactive Reply -> webhook] status:', resp.status, 'body:', text);
+      
+      // Mark this message as having a sent reply
+      setSentReplies(prev => {
+        const newSet = new Set([...prev, activeReply.messageId]);
+        // Persist to localStorage
+        try {
+          localStorage.setItem('sentReplies', JSON.stringify([...newSet]));
+        } catch (e) {
+          console.warn('Failed to save sentReplies to localStorage:', e);
+        }
+        return newSet;
+      });
+      
+      // Close reply box after sending
+      setActiveReply(null);
+      setReplyText('');
+      
+    } catch (e) {
+      console.error('Interactive reply webhook error:', e);
+    }
+  }, [activeReply, activeConv?.otherUserId, activeConversationId, currentUserId, replyText]);
+
+  // Handle cancel reply
+  const handleCancelReply = useCallback(() => {
+    setActiveReply(null);
+    setReplyText('');
+  }, []);
+
+  // Handle reply button click - directly send webhook with selected reply
+  const handleReplyClick = useCallback(async (reply: string, question: InteractiveQuestion, messageId: string) => {
+    try {
+      if (sentReplies.has(messageId)) return;
+      if (sendingReplyMessageId === messageId) return;
+      if (!activeConv?.otherUserId) return;
+
+      setSendingReplyMessageId(messageId);
+      
+      const currentUserUuid = await resolveUserId(currentUserId);
+      if (!currentUserUuid) return;
+      
+      const payload = {
+        conversation_id: activeConversationId,
+        message_id: messageId,
+        wallet_balance_user_id: activeConv.otherUserId,
+        sender_id: currentUserUuid,
+        receiver_id: activeConv.otherUserId,
+        question_value: question.value,
+        question_points: question.points,
+        question_text: question.question,
+        reply_text: reply
+      };
+      
+      console.log('[Reply Click -> webhook] payload:', payload);
+      
+      const resp = await fetch('https://primary-production-6722.up.railway.app/webhook/reply-drink', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+        cache: 'no-store',
+        keepalive: true,
+      });
+      
+      const text = await resp.text().catch(() => '');
+      console.log('[Reply Click -> webhook] status:', resp.status, 'body:', text);
+      
+      // Mark this message as having a sent reply
+      setSentReplies(prev => {
+        const newSet = new Set([...prev, messageId]);
+        try {
+          localStorage.setItem('sentReplies', JSON.stringify([...newSet]));
+        } catch (e) {
+          console.warn('Failed to save sentReplies to localStorage:', e);
+        }
+        return newSet;
+      });
+      
+    } catch (e) {
+      console.error('Reply click webhook error:', e);
+    } finally {
+      setSendingReplyMessageId(prev => (prev === messageId ? null : prev));
+    }
+  }, [activeConv?.otherUserId, activeConversationId, currentUserId, sendingReplyMessageId, sentReplies]);
 
   // Supabase Storage bucket for chat image uploads
   const STORAGE_BUCKET = 'chat-uploads';
@@ -361,6 +574,93 @@ const Messages: React.FC<MessagesProps> = ({ navigateTo }) => {
     }
   }, [currentUserId, fetchLatestMessages]);
 
+  // Fetch other user's user_type to determine if creator
+  useEffect(() => {
+    const run = async () => {
+      try {
+        if (!activeConv?.otherUserId) { setIsOtherCreator(false); return; }
+        const { data } = await supabase
+          .from('users')
+          .select('user_type')
+          .eq('id', activeConv.otherUserId)
+          .maybeSingle();
+        setIsOtherCreator((data?.user_type as string | undefined) === 'creator');
+      } catch { setIsOtherCreator(false); }
+    };
+    run();
+  }, [activeConv?.otherUserId]);
+
+  // Handle inline questions close
+  const handleCloseInlineQuestions = () => {
+    setShowInlineQuestions(null);
+  };
+
+  // Handle question click - directly send webhook
+  const handleQuestionClick = async (questionId: string, question: string, actionType: string, points?: number) => {
+    try {
+      if (!activeConv?.otherUserId) return;
+      
+      const latestMsgId: string | null = messages.length ? messages[messages.length - 1].id : null;
+      const currentUserUuid = await resolveUserId(currentUserId);
+      if (!currentUserUuid) return;
+      
+      const payload = {
+        conversation_id: activeConversationId,
+        message_id: latestMsgId,
+        wallet_balance_user_id: activeConv.otherUserId,
+        sender_id: currentUserUuid,
+        receiver_id: activeConv.otherUserId,
+        type: actionType,
+        question_id: questionId,
+        question_text: question,
+        points: points
+      };
+      
+      console.log(`[Direct webhook -> ${actionType}] payload:`, payload);
+      
+      const resp = await fetch('https://primary-production-6722.up.railway.app/webhook/drink', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+        cache: 'no-store',
+        keepalive: true,
+      });
+      
+      const text = await resp.text().catch(() => '');
+      console.log(`[Direct webhook -> ${actionType}] status:`, resp.status, 'body:', text);
+      
+      // Close the questions after successful send
+      handleCloseInlineQuestions();
+    } catch (e) {
+      console.error(`${actionType} webhook error:`, e);
+    }
+  };
+
+
+  // Handle send tip button click
+  const handleSendTip = useCallback(() => {
+    setShowInlineQuestions('tip');
+  }, []);
+
+  // Handle send gift button click
+  const handleSendGift = useCallback(() => {
+    setShowInlineQuestions('gift');
+  }, []);
+
+  // Handle show love button click
+  const handleShowLove = useCallback(() => {
+    setShowInlineQuestions('love');
+  }, []);
+
+  // Handle boost creator button click
+  const handleBoostCreator = useCallback(() => {
+    setShowInlineQuestions('boost');
+  }, []);
+
+  const handleBuyDrink = useCallback(() => {
+    setShowInlineQuestions('drink');
+  }, []);
+
   const sendWebhookMessage = async (messageText: string) => {
     try {
       if (!activeConv || !activeConv.otherUserId) return;
@@ -624,9 +924,64 @@ const Messages: React.FC<MessagesProps> = ({ navigateTo }) => {
                   </h3>
                 </div>
               </div>
-              <button className="text-gray-300 hover:text-white transition-colors duration-150">
-                <MoreVertical className="h-5 w-5" />
-              </button>
+              <div className="flex items-center gap-2">
+                {isOtherCreator && (
+                  <div className="flex items-center gap-1.5 bg-gray-800/30 backdrop-blur-sm rounded-full p-1 border border-gray-700/50">
+                    <button
+                      onClick={handleSendGift}
+                      className="p-2.5 rounded-full bg-gradient-to-r from-purple-500 to-pink-600 text-white shadow-lg hover:from-purple-600 hover:to-pink-700 hover:scale-105 transition-all duration-200 hover:shadow-purple-500/25"
+                      title="Send Gift"
+                    >
+                      <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M20 6h-2.18c.11-.31.18-.65.18-1a2.996 2.996 0 0 0-5.5-1.65l-.5.67-.5-.68C10.96 2.54 10.05 2 9 2 7.34 2 6 3.34 6 5c0 .35.07.69.18 1H4c-1.11 0-1.99.89-1.99 2L2 19c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V8c0-1.11-.89-2-2-2zm-5-2c.55 0 1 .45 1 1s-.45 1-1 1-1-.45-1-1 .45-1 1-1zM9 4c.55 0 1 .45 1 1s-.45 1-1 1-1-.45-1-1 .45-1 1-1z"/>
+                      </svg>
+                    </button>
+                    <button
+                      onClick={handleShowLove}
+                      className="p-2.5 rounded-full bg-gradient-to-r from-red-500 to-pink-500 text-white shadow-lg hover:from-red-600 hover:to-pink-600 hover:scale-105 transition-all duration-200 hover:shadow-red-500/25"
+                      title="Show Love"
+                    >
+                      <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+                      </svg>
+                    </button>
+                    <button
+                      onClick={handleSendTip}
+                      className="p-2.5 rounded-full bg-gradient-to-r from-yellow-500 to-orange-600 text-white shadow-lg hover:from-yellow-600 hover:to-orange-700 hover:scale-105 transition-all duration-200 hover:shadow-yellow-500/25"
+                      title="Send Tip"
+                    >
+                      <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+                      </svg>
+                    </button>
+                    <button
+                      onClick={handleBoostCreator}
+                      className="p-2.5 rounded-full bg-gradient-to-r from-blue-500 to-cyan-600 text-white shadow-lg hover:from-blue-600 hover:to-cyan-700 hover:scale-105 transition-all duration-200 hover:shadow-blue-500/25"
+                      title="Boost Creator"
+                    >
+                      <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M13 7h-2v4H7v2h4v4h2v-4h4v-2h-4V7zm-1-5C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"/>
+                      </svg>
+                    </button>
+                    <button
+                      onClick={handleBuyDrink}
+                      className="p-2.5 rounded-full bg-gradient-to-r from-pink-500 to-purple-600 text-white shadow-lg hover:from-pink-600 hover:to-purple-700 hover:scale-105 transition-all duration-200 hover:shadow-pink-500/25"
+                      title="Buy a drink"
+                    >
+                      <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M7 2v2h8V2c0-.55-.45-1-1-1H8c-.55 0-1 .45-1 1z"/>
+                        <path d="M5 5v12c0 2.21 1.79 4 4 4h6c2.21 0 4-1.79 4-4V5H5zm12 12c0 1.1-.9 2-2 2H9c-1.1 0-2-.9-2-2V7h10v10z"/>
+                        <path d="M18 6h2c1.1 0 2 .9 2 2v2c0 1.1-.9 2-2 2h-2V6z"/>
+                        <circle cx="12" cy="12" r="2" fill="white" opacity="0.8"/>
+                        <path d="M8 9h8v1H8V9z" fill="white" opacity="0.6"/>
+                      </svg>
+                    </button>
+                  </div>
+                )}
+                <button className="text-gray-300 hover:text-white transition-colors duration-150">
+                  <MoreVertical className="h-5 w-5" />
+                </button>
+              </div>
             </div>
 
             {/* Chat Messages */}
@@ -673,6 +1028,123 @@ const Messages: React.FC<MessagesProps> = ({ navigateTo }) => {
                           className="max-h-32 xs:max-h-40 sm:max-h-56 md:max-h-64 max-w-full rounded-md mb-1 transition-transform duration-200 motion-safe:hover:scale-[1.01]"
                         />
                       </a>
+                    ) : isInteractiveMessage(message.text) ? (
+                      (() => {
+                        const interactive = parseInteractiveMessage(message.text);
+                        if (!interactive) return <p className="text-xs xs:text-sm break-words whitespace-pre-wrap">{message.text}</p>;
+                        
+                        return (
+                          <div className="interactive-message w-full max-w-4xl">
+                            {/* Header */}
+                            <div className="bg-gradient-to-r from-pink-500/10 to-purple-600/10 border border-pink-500/20 rounded-t-xl p-4">
+                              <h3 className="text-sm font-semibold text-white mb-2">{interactive.mainQuestion}</h3>
+                              <p className="text-xs text-gray-300 opacity-80">{interactive.followUp}</p>
+                            </div>
+                            
+                            {/* Questions - Horizontal Row */}
+                            <div className="bg-gray-800/50 border-x border-pink-500/20 p-4">
+                              <div className="flex flex-wrap gap-2">
+                                {interactive.questions.map((question: InteractiveQuestion, idx: number) => {
+                                  const canReply = message.sender === 'other';
+                                  return (
+                                    <button
+                                      key={idx}
+                                      onClick={canReply ? () => handleInteractiveQuestion(question, message.id, message.sender) : undefined}
+                                      className={[
+                                        "flex items-center gap-3 px-4 py-3 rounded-lg border transition-all duration-200 group",
+                                        canReply
+                                          ? "bg-gray-700/50 hover:bg-gray-600/50 border-gray-600/30 hover:border-pink-500/40"
+                                          : "bg-gray-700/30 border-gray-600/20 cursor-default opacity-75"
+                                      ].join(' ')}
+                                    >
+                                    <div className="flex items-center gap-3">
+                                      <div className="text-sm font-medium text-white group-hover:text-pink-300 transition-colors">
+                                        {question.question}
+                                      </div>
+                                      <span className="text-xs font-semibold text-pink-400 bg-pink-500/20 px-2 py-1 rounded-full whitespace-nowrap">
+                                        {question.points} pts
+                                      </span>
+                                    </div>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                            
+                            {/* Replies Section - only receivers should see reply buttons */}
+                            {message.sender === 'other' && interactive.questions.some((q: InteractiveQuestion) => q.replies && q.replies.length > 0) && (
+                              <div className="bg-gray-700/30 border-x border-pink-500/20 p-4">
+                                {interactive.questions.map((question: InteractiveQuestion, qIdx: number) => {
+                                  if (!question.replies || question.replies.length === 0) return null;
+
+                                  const replyLocked = sentReplies.has(message.id);
+                                  const isSending = sendingReplyMessageId === message.id;
+                                  
+                                  return (
+                                    <div key={qIdx} className="mb-4 last:mb-0">
+                                      <div className="text-xs text-gray-400 mb-2">Reply options:</div>
+                                      <div className="flex flex-wrap gap-2">
+                                        {question.replies.map((reply: string, rIdx: number) => (
+                                          <button
+                                            key={rIdx}
+                                            disabled={replyLocked || isSending}
+                                            onClick={!replyLocked && !isSending ? () => handleReplyClick(reply, question, message.id) : undefined}
+                                            className={[
+                                              "px-3 py-2 text-sm rounded-lg border transition-all duration-200",
+                                              replyLocked || isSending
+                                                ? "bg-gray-600/20 text-gray-400 border-gray-600/20 cursor-not-allowed opacity-70"
+                                                : "bg-gray-600/50 text-gray-200 hover:bg-pink-500/20 hover:text-pink-300 border-gray-600/30 hover:border-pink-500/40"
+                                            ].join(' ')}
+                                          >
+                                            {reply}
+                                          </button>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+                            
+                            {/* Reply Box */}
+                            {activeReply && activeReply.messageId === message.id && (
+                              <div className="bg-gray-700/50 border-x border-pink-500/20 p-4">
+                                <div className="mb-3">
+                                  <p className="text-sm text-white mb-2">
+                                    Replying to: <span className="text-pink-300">{activeReply.question.question}</span>
+                                  </p>
+                                  <textarea
+                                    value={replyText}
+                                    onChange={(e) => setReplyText(e.target.value)}
+                                    placeholder="Write your message..."
+                                    className="w-full p-3 rounded-lg bg-gray-800/50 border border-gray-600/30 text-white text-sm resize-none focus:outline-none focus:border-pink-500/40"
+                                    rows={3}
+                                    autoFocus
+                                  />
+                                </div>
+                                <div className="flex gap-2 justify-end">
+                                  <button
+                                    onClick={handleCancelReply}
+                                    className="px-4 py-2 text-sm rounded-lg bg-gray-600/50 text-gray-300 hover:bg-gray-500/50 transition-colors"
+                                  >
+                                    Cancel
+                                  </button>
+                                  <button
+                                    onClick={handleSendReply}
+                                    className="px-4 py-2 text-sm rounded-lg bg-gradient-to-r from-pink-500 to-purple-600 text-white hover:from-pink-600 hover:to-purple-700 transition-all"
+                                  >
+                                    Send
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+                            
+                            {/* Footer */}
+                            <div className="bg-gray-800/30 border border-pink-500/20 rounded-b-xl p-3">
+                            </div>
+                          </div>
+                        );
+                      })()
                     ) : (
                       <p className="text-xs xs:text-sm break-words whitespace-pre-wrap">{message.text}</p>
                     )}
@@ -683,6 +1155,51 @@ const Messages: React.FC<MessagesProps> = ({ navigateTo }) => {
 
               {/* Auto-scroll anchor */}
               <div ref={messagesEndRef} />
+
+              {/* Inline Action Questions */}
+              {showInlineQuestions && (
+                <div className="mb-4 flex justify-center animate-slide-fade">
+                  <div className="bg-gray-800/90 backdrop-blur-sm rounded-2xl p-6 max-w-4xl w-full border border-gray-700/50 shadow-2xl">
+                    <div className="flex items-center justify-between mb-6">
+                      <h3 className="text-lg font-semibold text-white capitalize flex items-center gap-2">
+                        <span className="w-8 h-8 rounded-full bg-gradient-to-r from-pink-500 to-purple-600 flex items-center justify-center text-sm font-bold">
+                          {showInlineQuestions === 'gift' ? '🎁' : showInlineQuestions === 'love' ? '❤️' : showInlineQuestions === 'tip' ? '⭐' : showInlineQuestions === 'boost' ? '🚀' : '☕'}
+                        </span>
+                        {showInlineQuestions} Action Questions
+                      </h3>
+                      <button
+                        onClick={handleCloseInlineQuestions}
+                        className="text-gray-400 hover:text-white transition-colors p-1 rounded-full hover:bg-gray-700/50"
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    </div>
+                    
+                    <div className="flex flex-wrap gap-3 justify-center">
+                      {actionQuestions[showInlineQuestions as keyof typeof actionQuestions]?.map((q, index) => (
+                        <button
+                          key={q.id}
+                          onClick={() => handleQuestionClick(q.id, q.question, showInlineQuestions, q.points)}
+                          className="px-6 py-4 rounded-lg transition-all text-sm font-medium flex items-center gap-3 bg-gray-700/50 text-gray-300 hover:bg-gray-600/50 border border-gray-600/30 hover:border-pink-500/30 hover:scale-105"
+                        >
+                          <span className="w-6 h-6 rounded-full bg-pink-500/20 text-pink-400 text-xs flex items-center justify-center font-bold">
+                            {index + 1}
+                          </span>
+                          {q.question}
+                          {q.points && (
+                            <span className="ml-2 px-2 py-1 bg-yellow-500/20 text-yellow-400 text-xs rounded-full font-semibold">
+                              {q.points} pts
+                            </span>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                    
+                  </div>
+                </div>
+              )}
 
               {!messages.length && (
                 <div className="h-full w-full flex items-center justify-center text-sm text-gray-400">
@@ -742,6 +1259,7 @@ const Messages: React.FC<MessagesProps> = ({ navigateTo }) => {
           </section>
         </div>
       </div>
+
     </div>
   );
 };

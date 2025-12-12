@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { 
   Wallet as WalletIcon, 
   CreditCard, 
@@ -12,6 +12,8 @@ import {
   Award,
   ArrowLeft
 } from 'lucide-react';
+
+import { supabase } from '../lib/supabaseClient';
 
 interface Transaction {
   id: string;
@@ -35,53 +37,145 @@ interface WalletProps {
 }
 
 const Wallet: React.FC<WalletProps> = ({ navigateTo }) => {
-  const [currentPoints] = useState(2450);
-  const [totalEarned] = useState(15680);
-  const [totalSpent] = useState(13230);
+  const [currentPoints, setCurrentPoints] = useState<number>(0);
   const [activeTab, setActiveTab] = useState<'overview' | 'buy' | 'history'>('overview');
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const [transactions] = useState<Transaction[]>([
-    {
-      id: '1',
-      type: 'earned',
-      amount: 500,
-      description: 'Tip from @user123',
-      date: '2024-12-11T10:30:00Z',
-      icon: 'tip'
-    },
-    {
-      id: '2',
-      type: 'spent',
-      amount: -200,
-      description: 'Premium content unlock',
-      date: '2024-12-10T15:45:00Z',
-      icon: 'purchase'
-    },
-    {
-      id: '3',
-      type: 'earned',
-      amount: 1000,
-      description: 'Monthly subscription',
-      date: '2024-12-09T09:15:00Z',
-      icon: 'subscription'
-    },
-    {
-      id: '4',
-      type: 'earned',
-      amount: 250,
-      description: 'Daily login bonus',
-      date: '2024-12-08T08:00:00Z',
-      icon: 'bonus'
-    },
-    {
-      id: '5',
-      type: 'purchased',
-      amount: 2000,
-      description: 'Points purchase',
-      date: '2024-12-07T14:20:00Z',
-      icon: 'purchase'
-    }
-  ]);
+  // Resolve viewer strictly as the logged-in user (from userProfile/localStorage)
+  const resolveViewerIdFromStorage = (): string | null => {
+    try {
+      const ls = window.localStorage;
+      const candidates = [
+        ls.getItem('current_user_id'),
+        ls.getItem('public_id'),
+        ls.getItem('user_id'),
+      ];
+      for (const raw of candidates) {
+        const v = raw?.trim();
+        if (v && v !== 'null' && v !== 'undefined') return v;
+      }
+    } catch {/* ignore */}
+    return null;
+  };
+
+  // Helper: pick an icon from description/amount
+  const inferIcon = (desc?: string, amount?: number): Transaction['icon'] => {
+    const d = (desc || '').toLowerCase();
+    if (d.includes('tip')) return 'tip';
+    if (d.includes('subscription')) return 'subscription';
+    if (d.includes('bonus') || d.includes('reward')) return 'bonus';
+    if (d.includes('purchase') || d.includes('buy')) return 'purchase';
+    // default: based on sign
+    if ((amount ?? 0) > 0) return 'reward';
+    if ((amount ?? 0) < 0) return 'purchase';
+    return 'purchase';
+  };
+
+  const loadWallet = React.useCallback(async () => {
+      try {
+        setLoading(true);
+        setError(null);
+
+        const viewerId = resolveViewerIdFromStorage();
+        if (!viewerId) {
+          setCurrentPoints(0);
+          setTransactions([]);
+          setError('No logged-in user found');
+          setLoading(false);
+          return;
+        }
+
+        // Strictly query by resolved viewer id
+        const balRes = await supabase
+          .from('wallet_balances')
+          .select('points')
+          .eq('user_id', viewerId)
+          .maybeSingle();
+
+        const balData: { points: number } | null = balRes.data ? (balRes.data as { points: number }) : null;
+
+        setCurrentPoints(Number(balData?.points ?? 0));
+
+        // Recent transactions strictly for this viewer
+        type Row = { id: string; tx_type: 'earn' | 'spend' | 'adjust'; amount: number; description: string | null; created_at: string };
+        let txRows: Row[] = [];
+        {
+          const txRes = await supabase
+            .from('wallet_transactions')
+            .select('id, tx_type, amount, description, created_at')
+            .eq('user_id', viewerId)
+            .order('created_at', { ascending: false })
+            .limit(100);
+          if (txRes.data && !txRes.error) {
+            txRows = txRes.data as Row[];
+          }
+        }
+
+        const mapped: Transaction[] = (txRows ?? []).map((t: Row) => ({
+          id: String(t.id),
+          type: t.tx_type === 'earn' ? 'earned' : t.tx_type === 'spend' ? 'spent' : ((t.amount ?? 0) >= 0 ? 'earned' : 'spent'),
+          amount: Number(t.amount ?? 0),
+          description: String(t.description ?? ''),
+          date: String(t.created_at ?? new Date().toISOString()),
+          icon: inferIcon(t.description ?? undefined, t.amount),
+        }));
+
+        setTransactions(mapped);
+      } catch (e: unknown) {
+        console.error('[Wallet] load error:', e);
+        const msg = e instanceof Error ? e.message : 'Failed to load wallet data';
+        setError(msg);
+      } finally {
+        setLoading(false);
+      }
+  }, []);
+
+  // Initial load
+  useEffect(() => {
+    loadWallet();
+  }, [loadWallet]);
+
+  // Realtime updates
+  useEffect(() => {
+    // Resolve a stable viewer id for filters
+    const viewerId = resolveViewerIdFromStorage();
+
+    const channel = supabase
+      .channel(`wallet-realtime-${viewerId ?? 'self'}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'wallet_balances',
+          filter: viewerId ? `user_id=eq.${viewerId}` : undefined,
+        },
+        () => {
+          // Balance changed; reload
+          void loadWallet();
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'wallet_transactions',
+          filter: viewerId ? `user_id=eq.${viewerId}` : undefined,
+        },
+        () => {
+          // Any tx change; reload
+          void loadWallet();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [loadWallet]);
 
   const pointsPackages: PointsPackage[] = [
     { id: '1', points: 1000, price: 9.99, bonus: 0 },
@@ -133,8 +227,19 @@ const Wallet: React.FC<WalletProps> = ({ navigateTo }) => {
     }
   };
 
+  // Derived totals from transactions
+  const totalEarned = transactions.reduce((sum, t) => (t.amount > 0 ? sum + t.amount : sum), 0);
+  const totalSpent = transactions.reduce((sum, t) => (t.amount < 0 ? sum + Math.abs(t.amount) : sum), 0);
+
   return (
     <div className="wallet-page bg-gradient-to-br from-gray-900 via-black to-gray-900 min-h-screen text-gray-100">
+      {error && (
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 pt-4">
+          <div className="p-3 rounded-xl border border-red-500/30 bg-red-900/20 text-red-300 text-sm">
+            {error}
+          </div>
+        </div>
+      )}
       {/* Header Bar */}
       <div className="bg-black/20 backdrop-blur-xl border-b border-pink-500/20 shadow-lg shadow-pink-500/10 sticky top-0 z-50">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-4">
@@ -324,7 +429,7 @@ const Wallet: React.FC<WalletProps> = ({ navigateTo }) => {
                 </button>
               </div>
               <div className="space-y-3">
-                {transactions.slice(0, 5).map((transaction) => (
+                {(loading ? [] : transactions).slice(0, 5).map((transaction) => (
                   <div key={transaction.id} className="flex items-center justify-between p-3 rounded-xl bg-gray-800/50 hover:bg-gray-700/50 transition-colors">
                     <div className="flex items-center space-x-3">
                       <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
@@ -347,6 +452,9 @@ const Wallet: React.FC<WalletProps> = ({ navigateTo }) => {
                     </div>
                   </div>
                 ))}
+                {!loading && transactions.length === 0 && (
+                  <div className="text-center text-gray-400 text-sm">No activity yet.</div>
+                )}
               </div>
             </div>
           </div>
@@ -412,7 +520,7 @@ const Wallet: React.FC<WalletProps> = ({ navigateTo }) => {
                 <p className="text-gray-400">Complete record of your ConnectLove activity</p>
               </div>
               <div className="space-y-3">
-                {transactions.map((transaction) => (
+                {(loading ? [] : transactions).map((transaction) => (
                   <div key={transaction.id} className="flex items-center justify-between p-4 rounded-xl bg-gray-800/50 hover:bg-gray-700/50 transition-colors">
                     <div className="flex items-center space-x-4">
                       <div className={`w-12 h-12 rounded-full flex items-center justify-center ${
@@ -438,6 +546,9 @@ const Wallet: React.FC<WalletProps> = ({ navigateTo }) => {
                     </div>
                   </div>
                 ))}
+                {!loading && transactions.length === 0 && (
+                  <div className="text-center text-gray-400">No transactions found.</div>
+                )}
               </div>
             </div>
           </div>

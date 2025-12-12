@@ -32,6 +32,7 @@ interface PostWithMedia {
 const Creator: React.FC<CreatorProps> = ({ navigateTo }) => {
   const { selectedProfile } = useAuth();
   const [showSupportModal, setShowSupportModal] = useState(false);
+  const [pointsModalMessage, setPointsModalMessage] = useState<string | null>(null);
   const [supportLoading, setSupportLoading] = useState(false);
   const noopSetSupportTags = () => {};
   const [selectedTier, setSelectedTier] = useState<'Platinum' | 'Gold' | 'Silver' | 'Bronze'>('Bronze');
@@ -578,6 +579,37 @@ const Creator: React.FC<CreatorProps> = ({ navigateTo }) => {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
               </svg>
             </button>
+          {pointsModalMessage && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+              <div className="w-full max-w-sm rounded-2xl bg-gradient-to-br from-gray-900 via-gray-800 to-black border border-gray-700/50 p-5 shadow-2xl">
+                <h3 className="text-white text-lg font-bold mb-2">Insufficient Points</h3>
+                <p className="text-gray-300 text-sm mb-4">{pointsModalMessage}</p>
+                <div className="flex gap-3 justify-end">
+                  <button
+                    className="px-4 py-2 rounded-lg bg-gray-700 text-white hover:bg-gray-600 text-sm"
+                    onClick={() => setPointsModalMessage(null)}
+                  >
+                    Close
+                  </button>
+                  <button
+                    className="px-4 py-2 rounded-lg bg-gradient-to-r from-pink-500 to-purple-600 text-white text-sm hover:from-pink-600 hover:to-purple-700"
+                    onClick={() => {
+                      setPointsModalMessage(null);
+                      try {
+                        if (navigateTo) {
+                          navigateTo('wallet');
+                        } else if (typeof window !== 'undefined') {
+                          window.location.href = '/wallet';
+                        }
+                      } catch (e) { void e; }
+                    }}
+                  >
+                    Go to Wallet
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
             <div className="text-white font-bold text-lg sm:text-xl">ConnectLove</div>
           </div>
           <div className="flex items-center space-x-2 sm:space-x-4">
@@ -616,32 +648,31 @@ const Creator: React.FC<CreatorProps> = ({ navigateTo }) => {
       </header>
 
       {/* Profile Section */}
-      <div className="flex flex-col md:flex-row max-w-6xl mx-auto pt-16 sm:pt-20 px-2 sm:px-4">
+      <div className="flex flex-col md:flex-row md:items-start max-w-6xl mx-auto pt-12 sm:pt-16 px-2 sm:px-4">
         {/* Left Profile Section */}
-        <div className="profile-section md:w-1/3 relative p-4 sm:p-6 md:p-8 flex flex-col items-center bg-gradient-to-br from-gray-900/90 to-gray-800/90 backdrop-blur-xl rounded-2xl shadow-2xl shadow-pink-500/10 border border-pink-500/20 my-3 sm:my-4 mx-0 sm:mx-2 overflow-y-auto">
-        <div className="profile-avatar w-20 h-20 sm:w-24 sm:h-24 md:w-28 md:h-28 rounded-full overflow-hidden bg-gradient-to-br from-gray-700 to-gray-800 mb-4 sm:mb-6 relative shadow-2xl ring-4 ring-pink-500/30 hover:ring-pink-400/50 transition-all">
+        <div className="profile-section md:w-1/3 relative p-3 sm:p-4 md:p-5 pb-8 sm:pb-10 flex flex-col items-center md:self-start bg-gradient-to-br from-gray-900/90 to-gray-800/90 backdrop-blur-xl rounded-2xl shadow-2xl shadow-pink-500/10 border border-pink-500/20 my-3 sm:my-4 mx-0 sm:mx-2">
+        <div className="profile-avatar w-16 h-16 sm:w-20 sm:h-20 md:w-24 md:h-24 rounded-full overflow-hidden bg-gradient-to-br from-gray-700 to-gray-800 mb-3 sm:mb-4 relative shadow-2xl ring-3 ring-pink-500/30 hover:ring-pink-400/50 transition-all">
             <div className="w-full h-full flex items-center justify-center text-gray-400">
-              <User className="h-10 w-10 sm:h-12 sm:w-12 md:h-16 md:w-16" />
+              <User className="h-8 w-8 sm:h-10 sm:w-10 md:h-12 md:w-12" />
             </div>
-            <div className="absolute -bottom-1 -right-1 w-6 h-6 sm:w-7 sm:h-7 md:w-8 md:h-8 bg-gradient-to-r from-green-400 to-green-500 rounded-full border-3 border-gray-900 shadow-lg animate-pulse"></div>
+            <div className="absolute -bottom-1 -right-1 w-5 h-5 sm:w-6 sm:h-6 md:w-7 md:h-7 bg-gradient-to-r from-green-400 to-green-500 rounded-full border-3 border-gray-900 shadow-lg animate-pulse"></div>
           </div>
+          <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-center text-transparent bg-gradient-to-r from-pink-400 to-purple-400 bg-clip-text mb-0.5">{displayName || ' '}</h1>
+          <p className="text-pink-400 text-xs sm:text-sm font-medium mb-1.5 sm:mb-2">{displayUsername}</p>
+          <p className="text-gray-300 text-xs sm:text-sm text-center mb-3 sm:mb-4 line-clamp-3 leading-relaxed">{displayBio}</p>
           
-          <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-center text-transparent bg-gradient-to-r from-pink-400 to-purple-400 bg-clip-text mb-1">{displayName || ' '}</h1>
-          <p className="text-pink-400 text-sm sm:text-base font-medium mb-2 sm:mb-3">{displayUsername}</p>
-          <p className="text-gray-300 text-sm sm:text-base text-center mb-4 sm:mb-6 line-clamp-3 leading-relaxed">{displayBio}</p>
-          
-          <div className="flex justify-center space-x-6 sm:space-x-8 w-full mb-6 sm:mb-8 bg-gradient-to-r from-gray-800/50 to-gray-700/50 backdrop-blur-sm rounded-2xl p-4 border border-pink-500/20">
+          <div className="flex justify-center space-x-3 sm:space-x-4 w-full mb-4 sm:mb-5 bg-gradient-to-r from-gray-800/50 to-gray-700/50 backdrop-blur-sm rounded-2xl p-2.5 border border-pink-500/20">
             <div className="text-center">
-              <div className="text-lg sm:text-xl md:text-2xl font-bold text-white mb-1">{displaySupporters}</div>
-              <div className="text-pink-300 text-xs sm:text-sm font-medium">Supporters</div>
+              <div className="text-sm sm:text-base md:text-lg font-bold text-white mb-0.5">{displaySupporters}</div>
+              <div className="text-pink-300 text-[10px] sm:text-[11px] font-medium">Supporters</div>
             </div>
-            <div className="text-center border-x border-pink-500/20 px-6">
-              <div className="text-lg sm:text-xl md:text-2xl font-bold text-white mb-1">0</div>
-              <div className="text-pink-300 text-xs sm:text-sm font-medium">Posts</div>
+            <div className="text-center border-x border-pink-500/20 px-3">
+              <div className="text-sm sm:text-base md:text-lg font-bold text-white mb-0.5">0</div>
+              <div className="text-pink-300 text-[10px] sm:text-[11px] font-medium">Posts</div>
             </div>
             <div className="text-center">
-              <div className="text-lg sm:text-xl md:text-2xl font-bold text-white mb-1">{typeof displayRating === 'number' ? displayRating : '-'}</div>
-              <div className="text-pink-300 text-xs sm:text-sm font-medium">Rating</div>
+              <div className="text-sm sm:text-base md:text-lg font-bold text-white mb-0.5">{typeof displayRating === 'number' ? displayRating : '-'}</div>
+              <div className="text-pink-300 text-[10px] sm:text-[11px] font-medium">Rating</div>
             </div>
           </div>
           
@@ -658,21 +689,52 @@ const Creator: React.FC<CreatorProps> = ({ navigateTo }) => {
                   badge === 'S' ? 'bg-gradient-to-r from-slate-400 to-slate-500 text-white shadow-lg shadow-slate-400/30' :
                                   'bg-gradient-to-r from-amber-600 to-amber-700 text-white shadow-lg shadow-amber-500/30';
                 return (
-                  <div className={`supporter-badge ${cls} rounded-full p-2 shadow-xl border border-white/20`}>
-                    <span className="inline-flex w-8 h-8 sm:w-10 sm:h-10 rounded-full items-center justify-center text-sm sm:text-base font-bold">{badge}</span>
+                  <div className={`supporter-badge ${cls} rounded-full p-1.5 shadow-xl border border-white/20`}>
+                    <span className="inline-flex w-7 h-7 sm:w-8 sm:h-8 rounded-full items-center justify-center text-[11px] sm:text-xs font-bold">{badge}</span>
                   </div>
                 );
               })()}
             </div>
           ) : (
-            <div className="mb-6 sm:mb-8" />
+            <div className="mb-5 sm:mb-6" />
           )}
           
           <button 
-            onClick={() => setShowSupportModal(true)}
-            className="w-full bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 text-white font-bold rounded-full px-6 sm:px-8 py-3 sm:py-4 flex items-center justify-center transition-all shadow-lg shadow-pink-500/25 hover:shadow-pink-500/40 hover:scale-105 mb-4 sm:mb-5 text-sm sm:text-base"
+            onClick={async () => {
+              try {
+                const viewerId = localStorage.getItem('current_user_id') || localStorage.getItem('public_id') || localStorage.getItem('user_id');
+                const viewerUsername = localStorage.getItem('username') || localStorage.getItem('full_name') || '';
+                const creatorUsername = selectedProfile?.username || selectedProfile?.name || '';
+                const payload = {
+                  viewer_id: viewerId || null,
+                  viewer_username: viewerUsername || null,
+                  creator_identifier: creatorUsername || null,
+                  creator_username: creatorUsername || null,
+                  source_page: 'creator',
+                  action: 'support_click',
+                  ts: new Date().toISOString(),
+                };
+                console.log('[webhook] POST /webhook/subscribe payload:', payload);
+                const resp = await fetch('https://primary-production-6722.up.railway.app/webhook/subscribe', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify(payload),
+                  cache: 'no-store',
+                  keepalive: true,
+                });
+                const text = await resp.text().catch(() => '');
+                console.log('[webhook] response status:', resp.status, 'body:', text);
+                if (resp.ok && text.includes('Not enough points')) {
+                  setPointsModalMessage('Not enough points to unlock this collection.');
+                }
+              } catch (e) {
+                console.error('subscribe webhook error:', e);
+              }
+              setShowSupportModal(true);
+            }}
+            className="w-full bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 text-white font-bold rounded-full px-4 sm:px-5 py-2 sm:py-2.5 flex items-center justify-center transition-all shadow-lg shadow-pink-500/25 hover:shadow-pink-500/40 hover:scale-105 mb-3 sm:mb-3.5 text-xs sm:text-xs"
           >
-            <Heart className="h-4 w-4 sm:h-5 sm:w-5 mr-2 sm:mr-3" />
+            <Heart className="h-4 w-4 sm:h-4 sm:w-4 mr-2 sm:mr-2" />
             {isFollowing && currentTag ? 'Upgrade Subscription' : 'Support Creator'}
           </button>
           {/* Follow/Unfollow control (independent of subscription tier) */}
@@ -680,14 +742,14 @@ const Creator: React.FC<CreatorProps> = ({ navigateTo }) => {
             !isFollowing ? (
               <button
                 onClick={onFollowNow}
-                className="w-full bg-gray-900/50 backdrop-blur-sm border-2 border-pink-500 text-pink-400 hover:bg-pink-500/10 hover:text-pink-300 font-bold rounded-full px-6 sm:px-8 py-3 sm:py-4 flex items-center justify-center transition-all hover:scale-105 mb-4 sm:mb-5 text-sm sm:text-base shadow-lg"
+                className="w-full bg-gray-900/50 backdrop-blur-sm border-2 border-pink-500 text-pink-400 hover:bg-pink-500/10 hover:text-pink-300 font-bold rounded-full px-4 sm:px-5 py-2 sm:py-2.5 flex items-center justify-center transition-all hover:scale-105 mb-3 sm:mb-3.5 text-xs sm:text-xs shadow-lg"
               >
                 Follow
               </button>
             ) : (
               <button
                 onClick={onUnfollowNow}
-                className="w-full bg-gray-900/50 backdrop-blur-sm border-2 border-gray-600 text-gray-300 hover:bg-gray-800/50 hover:text-gray-200 font-medium rounded-full px-6 sm:px-8 py-3 sm:py-4 flex items-center justify-center transition-all hover:scale-105 mb-4 sm:mb-5 text-sm sm:text-base shadow-lg"
+                className="w-full bg-gray-900/50 backdrop-blur-sm border-2 border-gray-600 text-gray-300 hover:bg-gray-800/50 hover:text-gray-200 font-medium rounded-full px-4 sm:px-5 py-2 sm:py-2.5 flex items-center justify-center transition-all hover:scale-105 mb-3 sm:mb-3.5 text-xs sm:text-xs shadow-lg"
               >
                 Unfollow
               </button>
@@ -713,32 +775,32 @@ const Creator: React.FC<CreatorProps> = ({ navigateTo }) => {
               
               navigateTo?.('messages');
             }}
-            className="w-full bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 text-white font-bold rounded-full px-6 sm:px-8 py-3 sm:py-4 flex items-center justify-center transition-all hover:scale-105 mb-4 sm:mb-5 text-sm sm:text-base shadow-lg shadow-blue-500/25"
+            className="w-full bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 text-white font-bold rounded-full px-4 sm:px-5 py-2 sm:py-2.5 flex items-center justify-center transition-all hover:scale-105 mb-3 sm:mb-3.5 text-xs sm:text-xs shadow-lg shadow-blue-500/25"
           >
-            <MessageCircle className="h-4 w-4 sm:h-5 sm:w-5 mr-2 sm:mr-3" />
+            <MessageCircle className="h-4 w-4 sm:h-4 sm:w-4 mr-2 sm:mr-2" />
             Send Message
           </button>
           
-          <div className="flex justify-center space-x-6 sm:space-x-8 w-full pt-4 sm:pt-6 border-t border-pink-500/20">
-            <button className="flex items-center text-gray-300 hover:text-pink-400 text-sm sm:text-base font-medium transition-all hover:scale-105">
-              <Settings className="h-5 w-5 sm:h-6 sm:w-6 mr-2 sm:mr-3" />
+          <div className="flex justify-center space-x-4 sm:space-x-5 w-full pt-3 sm:pt-4 border-t border-pink-500/20">
+            <button className="flex items-center text-gray-300 hover:text-pink-400 text-[11px] sm:text-xs font-medium transition-all hover:scale-105">
+              <Settings className="h-4 w-4 sm:h-4 sm:w-4 mr-2 sm:mr-2" />
               <span>Settings</span>
             </button>
-            <button className="flex items-center text-gray-300 hover:text-pink-400 text-sm sm:text-base font-medium transition-all hover:scale-105">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 sm:h-6 sm:w-6 mr-2 sm:mr-3" viewBox="0 0 20 20" fill="currentColor">
+            <button className="flex items-center text-gray-300 hover:text-pink-400 text-[11px] sm:text-xs font-medium transition-all hover:scale-105">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 sm:h-4 sm:w-4 mr-2 sm:mr-2" viewBox="0 0 20 20" fill="currentColor">
                 <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
               </svg>
               <span>Privacy</span>
             </button>
           </div>
           {/* Supporter View CTA at bottom */}
-          <div className="mt-4 sm:mt-6 w-full">
+          <div className="mt-4 sm:mt-6 mb-5 sm:mb-7 w-full">
             <button
               onClick={handleSupporterView}
-              className="w-full py-3 sm:py-4 px-6 rounded-xl bg-gradient-to-r from-pink-500/20 to-purple-500/20 hover:from-pink-500/30 hover:to-purple-500/30 text-pink-300 hover:text-white flex items-center justify-center space-x-3 transition-all hover:scale-105 border border-pink-500/30 backdrop-blur-sm shadow-lg font-medium"
+              className="w-full py-2 sm:py-2.5 px-4 rounded-xl bg-gradient-to-r from-pink-500/20 to-purple-500/20 hover:from-pink-500/30 hover:to-purple-500/30 text-pink-300 hover:text-white flex items-center justify-center space-x-2 transition-all hover:scale-105 border border-pink-500/30 backdrop-blur-sm shadow-lg font-medium"
             >
-              <Eye className="w-5 h-5 sm:w-6 sm:h-6" />
-              <span className="text-sm sm:text-base">Supporter View</span>
+              <Eye className="w-4 h-4 sm:w-4 sm:h-4" />
+              <span className="text-[11px] sm:text-xs">Supporter View</span>
             </button>
           </div>
         </div>
@@ -835,7 +897,7 @@ const Creator: React.FC<CreatorProps> = ({ navigateTo }) => {
               const isVideo = (url: string) => /\.(mp4|webm|ogg)$/i.test(url);
 
               return (
-                <article key={post.id} className="group bg-gradient-to-br from-gray-900/80 to-gray-800/80 backdrop-blur-xl rounded-2xl overflow-hidden border border-pink-500/20 shadow-2xl shadow-pink-500/10 hover:shadow-pink-500/20 transition-all hover:scale-[1.02] animate-in-up">
+                <article key={post.id} className="bg-gradient-to-br from-gray-900/80 to-gray-800/80 backdrop-blur-xl rounded-2xl overflow-hidden border border-pink-500/20 shadow-2xl shadow-pink-500/10 animate-in-up">
                   <div className="p-4 sm:p-6">
                     <div className="flex items-center">
                       {post.author_avatar ? (
@@ -843,20 +905,20 @@ const Creator: React.FC<CreatorProps> = ({ navigateTo }) => {
                           <img
                             src={post.author_avatar}
                             alt={post.author_name || authorName}
-                            className="w-12 h-12 sm:w-14 sm:h-14 rounded-full object-cover mr-3 sm:mr-4 ring-2 ring-pink-500/30 hover:ring-pink-400/50 transition-all"
+                            className="w-9 h-9 sm:w-11 sm:h-11 rounded-full object-cover mr-2.5 sm:mr-3 ring-2 ring-pink-500/30 hover:ring-pink-400/50 transition-all"
                             onError={(e) => { const t = e.currentTarget as HTMLImageElement; t.onerror = null; t.src = '/default-avatar.png'; }}
                           />
-                          <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-gradient-to-r from-green-400 to-green-500 rounded-full border-2 border-gray-900"></div>
+                          <div className="absolute -bottom-1 -right-1 w-3.5 h-3.5 bg-gradient-to-r from-green-400 to-green-500 rounded-full border-2 border-gray-900"></div>
                         </div>
                       ) : (
-                        <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-gradient-to-r from-gray-700 to-gray-800 mr-3 sm:mr-4 flex items-center justify-center text-gray-400 ring-2 ring-gray-600/30">
-                          <User className="w-6 h-6" />
+                        <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-full bg-gradient-to-r from-gray-700 to-gray-800 mr-2.5 sm:mr-3 flex items-center justify-center text-gray-400 ring-2 ring-gray-600/30">
+                          <User className="w-5 h-5" />
                         </div>
                       )}
                       <div className="flex-1">
                         <div className="flex items-center justify-between">
                           <div>
-                            <h3 className="font-bold text-base sm:text-lg text-white leading-tight hover:text-pink-300 transition-colors cursor-pointer">
+                            <h3 className="font-bold text-sm sm:text-base text-white leading-tight hover:text-pink-300 transition-colors cursor-pointer">
                               {post.author_name || authorName}
                             </h3>
                             <p className="text-xs text-gray-400 flex items-center font-medium">
@@ -931,16 +993,16 @@ const Creator: React.FC<CreatorProps> = ({ navigateTo }) => {
                   {/* Footer */}
                   <div className="px-4 sm:px-6 pt-3 sm:pt-4 pb-4 flex items-center justify-between border-t border-pink-500/20 bg-gradient-to-r from-gray-900/50 to-gray-800/50">
                     <div className="flex items-center space-x-6">
-                      <button className="flex items-center text-gray-300 hover:text-pink-400 transition-all hover:scale-105 group" aria-label="Like">
-                        <Heart className="h-5 w-5 sm:h-6 sm:w-6 mr-2 group-hover:fill-pink-400" />
+                      <button className="flex items-center text-gray-300 hover:text-pink-400 focus-visible:text-pink-400 active:text-pink-400 transition-all hover:scale-105 focus-visible:scale-105 active:scale-105 group" aria-label="Like">
+                        <Heart className="h-5 w-5 sm:h-6 sm:w-6 mr-2 group-hover:fill-pink-400 group-focus-visible:fill-pink-400 group-active:fill-pink-400" />
                         <span className="text-sm sm:text-base font-medium">0</span>
                       </button>
-                      <button className="flex items-center text-gray-300 hover:text-blue-400 transition-all hover:scale-105 group" aria-label="Comment">
-                        <MessageCircle className="h-5 w-5 sm:h-6 sm:w-6 mr-2 group-hover:fill-blue-400" />
+                      <button className="flex items-center text-gray-300 hover:text-blue-400 focus-visible:text-blue-400 active:text-blue-400 transition-all hover:scale-105 focus-visible:scale-105 active:scale-105 group" aria-label="Comment">
+                        <MessageCircle className="h-5 w-5 sm:h-6 sm:w-6 mr-2 group-hover:fill-blue-400 group-focus-visible:fill-blue-400 group-active:fill-blue-400" />
                         <span className="text-sm sm:text-base font-medium">0</span>
                       </button>
-                      <button className="flex items-center text-gray-300 hover:text-purple-400 transition-all hover:scale-105 group" aria-label="Share">
-                        <Share2 className="h-5 w-5 sm:h-6 sm:w-6 group-hover:scale-110" />
+                      <button className="flex items-center text-gray-300 hover:text-purple-400 focus-visible:text-purple-400 active:text-purple-400 transition-all hover:scale-105 focus-visible:scale-105 active:scale-105 group" aria-label="Share">
+                        <Share2 className="h-5 w-5 sm:h-6 sm:w-6 group-hover:scale-110 group-focus-visible:scale-110 group-active:scale-110" />
                       </button>
                     </div>
                     <div className="flex items-center">

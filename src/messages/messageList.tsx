@@ -37,6 +37,7 @@ interface Conversation {
   receiver_id?: string;
   otherUserId?: string;
   isTemporary?: boolean;
+  otherUserType?: string;
 }
 
 const MessageList: React.FC<MessageListProps> = ({ onSelectConversation, selectedConversationId }) => {
@@ -197,7 +198,7 @@ useEffect(() => {
 
         const { data: userData, error: userError } = await supabase
           .from('users')
-          .select('username, full_name, avatar_url')
+          .select('username, full_name, avatar_url, user_type')
           .eq('id', otherUserUuid)
           .single();
 
@@ -217,6 +218,7 @@ useEffect(() => {
           sender_id: currentUserUuid,
           receiver_id: otherUserUuid,
           otherUserId: otherUserUuid,
+          otherUserType: userData?.user_type as string | undefined,
         };
 
         if (existingConvIndex >= 0) {
@@ -305,7 +307,7 @@ useEffect(() => {
         const conv = updatedConvs[i];
         const { data: userData } = await supabase
           .from('users')
-          .select('username, full_name, avatar_url')
+          .select('username, full_name, avatar_url, user_type')
           .eq('id', conv.otherUserId)
           .single();
 
@@ -314,6 +316,7 @@ useEffect(() => {
             ...conv,
             name: userData.full_name || userData.username || 'Unknown User',
             avatar: userData.avatar_url || '',
+            otherUserType: userData.user_type as string | undefined,
           };
         }
       }
@@ -577,7 +580,7 @@ useEffect(() => {
       try {
         const { data: userInfo } = await supabase
           .from('users')
-          .select('full_name, username')
+          .select('full_name, username, user_type')
           .eq('id', otherUserUuid)
           .maybeSingle();
         displayName = userInfo?.full_name || userInfo?.username || undefined;
@@ -706,13 +709,14 @@ useEffect(() => {
                         <h3 className="text-sm font-semibold text-gray-900 truncate">{conv.name}</h3>
                         <p className="text-xs text-gray-500">{conv.time}</p>
                       </div>
-                      <div className="flex justify-between items-center">
+                      <div className="flex justify-between items-center gap-2">
                         <p className="text-xs text-gray-500 truncate">{conv.lastMessage}</p>
                         {conv.unread > 0 && (
                           <span className="ml-2 bg-primary text-white text-xs rounded-full h-5 w-5 flex items-center justify-center animate-[wiggle_.6s_ease]">
                             {conv.unread}
                           </span>
                         )}
+                        {/* Buy a drink button intentionally not shown in list; moved to chat header */}
                       </div>
                     </div>
                   </div>

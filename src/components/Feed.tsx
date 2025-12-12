@@ -469,7 +469,7 @@ const Feed: React.FC<FeedProps> = ({ navigateTo, refreshSignal }) => {
           <article
             key={post.id}
             ref={idx === posts.length - 1 ? lastPostElementRef : undefined}
-            className="group bg-gradient-to-br from-gray-900/80 to-gray-800/80 backdrop-blur-xl text-gray-100 rounded-2xl overflow-hidden border border-pink-500/20 shadow-2xl shadow-pink-500/10 hover:shadow-pink-500/20 transition-all hover:scale-[1.02] animate-in-up"
+            className="bg-gradient-to-br from-gray-900/80 to-gray-800/80 backdrop-blur-xl text-gray-100 rounded-2xl overflow-hidden border border-pink-500/20 shadow-2xl shadow-pink-500/10 animate-in-up"
             style={{ animationDelay: `${idx * 60}ms` }}
             aria-posinset={idx + 1}
             aria-setsize={posts.length}
@@ -482,22 +482,22 @@ const Feed: React.FC<FeedProps> = ({ navigateTo, refreshSignal }) => {
                     <img
                       src={post.authorAvatar}
                       alt={post.authorName}
-                      className="w-12 h-12 sm:w-14 sm:h-14 rounded-full object-cover mr-3 sm:mr-4 cursor-pointer ring-2 ring-pink-500/30 hover:ring-pink-400/50 transition-all"
+                      className="w-9 h-9 sm:w-11 sm:h-11 rounded-full object-cover mr-2.5 sm:mr-3 cursor-pointer ring-2 ring-pink-500/30 hover:ring-pink-400/50 transition-all"
                       onError={(e) => { const t = e.currentTarget; t.onerror = null; t.src = '/default-avatar.png'; }}
                       onClick={() => handleCreatorClick(post.authorName, post.authorAvatar)}
                     />
-                    <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-gradient-to-r from-green-400 to-green-500 rounded-full border-2 border-gray-900"></div>
+                    <div className="absolute -bottom-1 -right-1 w-3.5 h-3.5 bg-gradient-to-r from-green-400 to-green-500 rounded-full border-2 border-gray-900"></div>
                   </div>
                 ) : (
-                  <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-gradient-to-r from-gray-700 to-gray-800 mr-3 sm:mr-4 flex items-center justify-center text-gray-400 cursor-default ring-2 ring-gray-600/30">
-                    <UserIcon className="w-6 h-6" />
+                  <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-full bg-gradient-to-r from-gray-700 to-gray-800 mr-2.5 sm:mr-3 flex items-center justify-center text-gray-400 cursor-default ring-2 ring-gray-600/30">
+                    <UserIcon className="w-5 h-5" />
                   </div>
                 )}
                 <div className="flex-1">
                   <div className="flex items-center justify-between">
                     <div>
                       <h3
-                        className="font-bold text-base sm:text-lg leading-tight cursor-pointer hover:text-pink-300 transition-colors text-white"
+                        className="font-bold text-sm sm:text-base leading-tight cursor-pointer hover:text-pink-300 transition-colors text-white"
                         onClick={() => handleCreatorClick(post.authorName, post.authorAvatar)}
                         title={`View ${post.authorName}'s profile`}
                       >
@@ -561,24 +561,24 @@ const Feed: React.FC<FeedProps> = ({ navigateTo, refreshSignal }) => {
             <div className="px-4 sm:px-6 pt-3 sm:pt-4 pb-4 flex items-center justify-between border-t border-pink-500/20 bg-gradient-to-r from-gray-900/50 to-gray-800/50">
               <div className="flex items-center space-x-6">
                 <button
-                  className="flex items-center text-gray-300 hover:text-pink-400 transition-all hover:scale-105 group"
+                  className="flex items-center text-gray-300 hover:text-pink-400 focus-visible:text-pink-400 active:text-pink-400 transition-all hover:scale-105 focus-visible:scale-105 active:scale-105 group"
                   aria-label="Like"
                 >
-                  <Heart className="h-5 w-5 sm:h-6 sm:w-6 mr-2 group-hover:fill-pink-400" />
+                  <Heart className="h-5 w-5 sm:h-6 sm:w-6 mr-2 group-hover:fill-pink-400 group-focus-visible:fill-pink-400 group-active:fill-pink-400" />
                   <span className="text-sm sm:text-base font-medium">{post.likesCount || 0}</span>
                 </button>
                 <button
-                  className="flex items-center text-gray-300 hover:text-blue-400 transition-all hover:scale-105 group"
+                  className="flex items-center text-gray-300 hover:text-blue-400 focus-visible:text-blue-400 active:text-blue-400 transition-all hover:scale-105 focus-visible:scale-105 active:scale-105 group"
                   aria-label="Comment"
                 >
-                  <MessageSquare className="h-5 w-5 sm:h-6 sm:w-6 mr-2 group-hover:fill-blue-400" />
+                  <MessageSquare className="h-5 w-5 sm:h-6 sm:w-6 mr-2 group-hover:fill-blue-400 group-focus-visible:fill-blue-400 group-active:fill-blue-400" />
                   <span className="text-sm sm:text-base font-medium">{post.commentsCount || 0}</span>
                 </button>
                 <button
-                  className="flex items-center text-gray-300 hover:text-purple-400 transition-all hover:scale-105 group"
+                  className="flex items-center text-gray-300 hover:text-purple-400 focus-visible:text-purple-400 active:text-purple-400 transition-all hover:scale-105 focus-visible:scale-105 active:scale-105 group"
                   aria-label="Share"
                 >
-                  <Share2 className="h-5 w-5 sm:h-6 sm:w-6 group-hover:scale-110" />
+                  <Share2 className="h-5 w-5 sm:h-6 sm:w-6 group-hover:scale-110 group-focus-visible:scale-110 group-active:scale-110" />
                 </button>
               </div>
               <div className="flex items-center">

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../../lib/supabaseClient';
 import { Lock, Globe, Users, User, Upload, Folder } from 'lucide-react';
 import PostModal from './PostModal';
+import { useAuth } from '../../components/AuthContext';
 
 // Collection types
 type Collection = {
@@ -66,6 +67,7 @@ const VisibilityIcon: React.FC<{ visibility: string }> = ({ visibility }) => {
 };
 
 const UserImageGallery: React.FC<UserImageGalleryProps> = ({ userId }) => {
+  const { navigateTo } = useAuth();
   const [images, setImages] = useState<ImagePost[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -84,6 +86,38 @@ const UserImageGallery: React.FC<UserImageGalleryProps> = ({ userId }) => {
   const [editingCollection, setEditingCollection] = useState<Collection | null>(null);
   const [editCollectionName, setEditCollectionName] = useState('');
   const [editCollectionPrice, setEditCollectionPrice] = useState('');
+  const [pointsModalMessage, setPointsModalMessage] = useState<string | null>(null);
+  const [unlocked, setUnlocked] = useState<Set<string>>(new Set());
+  const [viewingImage, setViewingImage] = useState<{ item: CollectionItem; items: CollectionItem[]; index: number } | null>(null);
+
+  // Keyboard navigation for image viewer
+  useEffect(() => {
+    if (!viewingImage) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        setViewingImage(prev => {
+          if (!prev) return prev;
+          const newIndex = Math.max(0, prev.index - 1);
+          if (newIndex === prev.index) return prev;
+          return { ...prev, item: prev.items[newIndex], index: newIndex };
+        });
+      } else if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        setViewingImage(prev => {
+          if (!prev) return prev;
+          const newIndex = Math.min(prev.items.length - 1, prev.index + 1);
+          if (newIndex === prev.index) return prev;
+          return { ...prev, item: prev.items[newIndex], index: newIndex };
+        });
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        setViewingImage(null);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [viewingImage]);
   
   // Fetch collections from database
   const fetchCollections = useCallback(async (targetUserId: string) => {
@@ -91,7 +125,7 @@ const UserImageGallery: React.FC<UserImageGalleryProps> = ({ userId }) => {
       // First fetch collections
       const { data: collectionsData, error: collectionsError } = await supabase
         .from('collections')
-        .select('id, name, description, cover_image_url, price, created_at')
+        .select('id, name, description, cover_image_url, price, created_at, supporters')
         .eq('user_id', targetUserId)
         .eq('is_active', true)
         .order('created_at', { ascending: false });
@@ -105,6 +139,15 @@ const UserImageGallery: React.FC<UserImageGalleryProps> = ({ userId }) => {
         setUserCollections([]);
         return;
       }
+
+      // Determine current viewer id for entitlement check
+      let viewerId: string | null = null;
+      try {
+        viewerId = localStorage.getItem('current_user_id') ||
+                   localStorage.getItem('public_id') ||
+                   localStorage.getItem('user_id') ||
+                   null;
+      } catch { /* ignore */ }
       
       // Get item counts for each collection
       const collectionsWithCounts = await Promise.all(
@@ -128,6 +171,23 @@ const UserImageGallery: React.FC<UserImageGalleryProps> = ({ userId }) => {
       );
       
       setUserCollections(collectionsWithCounts);
+
+      // Mark unlocked based on supporters array from DB so it stays unlocked after refresh
+      try {
+        if (viewerId) {
+          const entitled = new Set<string>();
+          const typed = collectionsData as Array<{ id: string; supporters: string[] | null }>;
+          for (const c of typed) {
+            const supportersArr = c.supporters;
+            if (Array.isArray(supportersArr) && supportersArr.includes(viewerId)) {
+              entitled.add(c.id);
+            }
+          }
+          if (entitled.size > 0) {
+            setUnlocked((prev) => new Set<string>([...prev, ...entitled]));
+          }
+        }
+      } catch { /* ignore */ }
     } catch (error) {
       console.error('Error fetching collections:', error);
     }
@@ -771,6 +831,112 @@ const UserImageGallery: React.FC<UserImageGalleryProps> = ({ userId }) => {
         onClose={handleCloseModal} 
         currentImageIndex={selectedImageIndex} 
       />
+      {pointsModalMessage && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+          <div className="w-full max-w-sm rounded-2xl bg-gradient-to-br from-gray-900 via-gray-800 to-black border border-gray-700/50 p-5 shadow-2xl">
+            <h3 className="text-white text-lg font-bold mb-2">Insufficient Points</h3>
+            <p className="text-gray-300 text-sm mb-4">{pointsModalMessage}</p>
+            <div className="flex gap-3 justify-end">
+              <button
+                className="px-4 py-2 rounded-lg bg-gray-700 text-white hover:bg-gray-600 text-sm"
+                onClick={() => setPointsModalMessage(null)}
+              >
+                Close
+              </button>
+              <button
+                className="px-4 py-2 rounded-lg bg-gradient-to-r from-pink-500 to-purple-600 text-white text-sm hover:from-pink-600 hover:to-purple-700"
+                onClick={() => {
+                  setPointsModalMessage(null);
+                  try {
+                    if (navigateTo) {
+                      navigateTo('wallet');
+                    } else if (typeof window !== 'undefined') {
+                      window.location.href = '/wallet';
+                    }
+                  } catch { /* ignore */ }
+                }}
+              >
+                Go to Wallet
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Image Viewer Modal */}
+      {viewingImage && (
+        <div className="fixed inset-0 bg-black/90 backdrop-blur-sm flex items-center justify-center z-[60] p-8">
+          <div className="relative w-full h-full max-w-6xl max-h-[85vh] flex items-center justify-center">
+            {/* Close Button */}
+            <button
+              className="absolute top-4 right-4 z-10 text-white/80 hover:text-white p-2 rounded-full bg-black/50 hover:bg-black/70 transition-colors"
+              onClick={() => setViewingImage(null)}
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+            
+            {/* Previous Button */}
+            {viewingImage.index > 0 && (
+              <button
+                className="fixed left-4 top-1/2 -translate-y-1/2 z-[70] text-white/80 p-3 rounded-full bg-black/50"
+                onClick={() => {
+                  const newIndex = viewingImage.index - 1;
+                  const newItem = viewingImage.items[newIndex];
+                  setViewingImage({ ...viewingImage, item: newItem, index: newIndex });
+                }}
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                </svg>
+              </button>
+            )}
+            
+            {/* Next Button */}
+            {viewingImage.index < viewingImage.items.length - 1 && (
+              <button
+                className="fixed right-4 top-1/2 -translate-y-1/2 z-[70] text-white/80 p-3 rounded-full bg-black/50"
+                onClick={() => {
+                  const newIndex = viewingImage.index + 1;
+                  const newItem = viewingImage.items[newIndex];
+                  setViewingImage({ ...viewingImage, item: newItem, index: newIndex });
+                }}
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </button>
+            )}
+            
+            {/* Main Image/Video */}
+            <div className="w-full h-full flex items-center justify-center">
+              {viewingImage.item.media_type === 'video' ? (
+                <video
+                  src={viewingImage.item.media_url}
+                  className="max-w-full max-h-full object-contain rounded-lg"
+                  controls
+                  autoPlay
+                />
+              ) : (
+                <img
+                  src={viewingImage.item.media_url}
+                  alt={viewingImage.item.title || 'Collection item'}
+                  className="max-w-full max-h-full object-contain rounded-lg"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).style.display = 'none';
+                  }}
+                />
+              )}
+            </div>
+            
+            {/* Image Counter */}
+            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-black/70 text-white px-3 py-1 rounded-full text-sm">
+              {viewingImage.index + 1} / {viewingImage.items.length}
+            </div>
+          </div>
+        </div>
+      )}
       
       {/* Public Images (category Public) */}
       <div className="bg-gradient-to-br from-gray-900 via-gray-800 to-black rounded-2xl p-6 shadow-2xl border border-gray-700/50 mb-6">
@@ -862,7 +1028,7 @@ const UserImageGallery: React.FC<UserImageGalleryProps> = ({ userId }) => {
                 type="number"
                 min="0"
                 step="0.01"
-                placeholder="Price (₱)"
+                placeholder="Points"
                 value={newCollectionPrice}
                 onChange={(e) => setNewCollectionPrice(e.target.value)}
                 className="w-32 px-3 py-2.5 text-sm bg-gray-700/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-transparent"
@@ -899,7 +1065,7 @@ const UserImageGallery: React.FC<UserImageGalleryProps> = ({ userId }) => {
                 type="number"
                 min="0"
                 step="0.01"
-                placeholder="Price (₱)"
+                placeholder="Points"
                 value={editCollectionPrice}
                 onChange={(e) => setEditCollectionPrice(e.target.value)}
                 className="w-32 px-3 py-2.5 text-sm bg-gray-700/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-transparent"
@@ -936,7 +1102,7 @@ const UserImageGallery: React.FC<UserImageGalleryProps> = ({ userId }) => {
             </div>
           ) : (
             userCollections.map((collection: Collection) => {
-              const isLocked = !isOwnProfile && collection.price > 0;
+              const isLocked = !isOwnProfile && collection.price > 0 && !unlocked.has(collection.id);
               return (
                 <div key={collection.id} className={`group relative bg-gradient-to-br from-gray-800/50 to-gray-900/50 rounded-2xl overflow-hidden border border-gray-700/30 transition-all duration-300 ${isLocked ? 'opacity-80' : 'hover:border-pink-500/30 hover:shadow-2xl hover:shadow-pink-500/10'}`}>
                 {/* Collection Card */}
@@ -951,7 +1117,7 @@ const UserImageGallery: React.FC<UserImageGalleryProps> = ({ userId }) => {
                         <img 
                           src={collection.coverImage} 
                           alt={`${collection.name} preview`}
-                          className={`w-full h-full object-cover transition-transform duration-300 ${isLocked ? 'blur-sm opacity-40' : 'group-hover:scale-105'} ${!isOwnProfile ? 'opacity-60' : ''}`}
+                          className={`w-full h-full object-cover transition-transform duration-300 ${isLocked ? 'blur-sm opacity-40' : 'group-hover:scale-105'} ${(!isOwnProfile && isLocked) ? 'opacity-60' : ''}`}
                         />
                         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
                         {isLocked && (
@@ -961,7 +1127,7 @@ const UserImageGallery: React.FC<UserImageGalleryProps> = ({ userId }) => {
                                 <Lock className="text-pink-400 h-8 w-8" />
                               </div>
                               <div className="bg-gradient-to-r from-pink-500 to-purple-600 text-white text-xs px-3 py-1.5 rounded-full font-medium">
-                                ₱{collection.price.toFixed(2)}
+                                {collection.price.toFixed(0)} pts
                               </div>
                             </div>
                           </div>
@@ -1051,7 +1217,7 @@ const UserImageGallery: React.FC<UserImageGalleryProps> = ({ userId }) => {
                             : `${collection.itemCount} exclusive item${collection.itemCount !== 1 ? 's' : ''}`}
                         </p>
                         <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-pink-500/20 text-pink-300 border border-pink-500/40 whitespace-nowrap">
-                          {collection.price > 0 ? `₱${collection.price.toFixed(2)}` : 'Free'}
+                          {collection.price > 0 ? `${collection.price.toFixed(0)} pts` : 'Free'}
                         </span>
                       </div>
                     </div>
@@ -1077,9 +1243,68 @@ const UserImageGallery: React.FC<UserImageGalleryProps> = ({ userId }) => {
                       ) : isLocked ? (
                         <button 
                           className="w-full px-4 py-3 bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 text-white rounded-xl font-medium text-sm transition-all duration-200 shadow-lg hover:shadow-pink-500/25"
-                          onClick={(e) => e.stopPropagation()}
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            try {
+                              const viewerId = localStorage.getItem('current_user_id') || localStorage.getItem('public_id') || localStorage.getItem('user_id');
+                              const viewerUsername = localStorage.getItem('username') || localStorage.getItem('full_name') || '';
+                              // creator identifier: prefer explicit userId prop; else viewing_user_id/public_id/logged_in_email (profile owner)
+                              const creatorIdentifier = (userId || localStorage.getItem('viewing_user_id') || localStorage.getItem('public_id') || localStorage.getItem('logged_in_email') || '') as string;
+                              const payload = {
+                                viewer_id: viewerId || null,
+                                viewer_username: viewerUsername || null,
+                                creator_identifier: creatorIdentifier || null,
+                                source_page: 'gallery',
+                                action: 'collection_subscribe_spend_click',
+                                collection_id: collection.id,
+                                collection_name: collection.name,
+                                price: Number(collection.price ?? 0),
+                                spend: 'spend',
+                                spend_type: 'subscribe_collection',
+                                currency: 'points',
+                                amount: Number(collection.price ?? 0),
+                                description: `spend: subscribe collection "${collection.name}" for ${Number(collection.price ?? 0)} points`,
+                                ts: new Date().toISOString(),
+                              };
+                              console.log('[webhook] POST /webhook/subscribe payload:', payload);
+                              const resp = await fetch('https://primary-production-6722.up.railway.app/webhook/subscribe', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify(payload),
+                                cache: 'no-store',
+                                keepalive: true,
+                              });
+                              const text = await resp.text().catch(() => '');
+                              console.log('[webhook] response status:', resp.status, 'body:', text);
+                              // Insufficient points
+                              if (resp.ok && text.includes('Not enough points')) {
+                                setPointsModalMessage('Not enough points to unlock this collection.');
+                              }
+                              // Success unlock
+                              try {
+                                const maybeJson = JSON.parse(text);
+                                if (resp.ok && (maybeJson?.Status === 'Success Unlocked' || String(text).includes('Success Unlocked'))) {
+                                  setUnlocked(prev => {
+                                    const next = new Set(prev);
+                                    next.add(collection.id);
+                                    return next;
+                                  });
+                                }
+                              } catch {
+                                if (resp.ok && String(text).includes('Success Unlocked')) {
+                                  setUnlocked(prev => {
+                                    const next = new Set(prev);
+                                    next.add(collection.id);
+                                    return next;
+                                  });
+                                }
+                              }
+                            } catch (err) {
+                              console.error('subscribe webhook error (gallery):', err);
+                            }
+                          }}
                         >
-                          Subscribe for ₱{collection.price.toFixed(2)}
+                          Unlock for {collection.price.toFixed(0)} pts
                         </button>
                       ) : (
                         <button className="w-full px-4 py-3 bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 text-white rounded-xl font-medium text-sm transition-all duration-200 shadow-lg hover:shadow-pink-500/25">
@@ -1117,11 +1342,16 @@ const UserImageGallery: React.FC<UserImageGalleryProps> = ({ userId }) => {
             </div>
             <div className="p-6 bg-gradient-to-br from-gray-900/50 to-black/50 overflow-y-auto" style={{ maxHeight: 'calc(85vh - 80px)' }}>
               {collectionItems[activeCollection.id] && collectionItems[activeCollection.id].length > 0 ? (
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                   {collectionItems[activeCollection.id].map((item) => (
                     <div
                       key={item.id}
-                      className="aspect-square rounded-xl overflow-hidden bg-gray-800 relative group cursor-pointer hover:shadow-2xl hover:shadow-pink-500/20 transition-all duration-300"
+                      className="aspect-[4/5] rounded-xl overflow-hidden bg-gray-800 relative group cursor-pointer hover:shadow-2xl hover:shadow-pink-500/20 transition-all duration-300"
+                      onClick={() => {
+                        const items = collectionItems[activeCollection.id] || [];
+                        const index = items.findIndex(i => i.id === item.id);
+                        setViewingImage({ item, items, index });
+                      }}
                     >
                       {item.media_type === 'video' ? (
                         <video
